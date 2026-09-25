@@ -707,6 +707,27 @@ plain CSS flex-basis, no JS required) is what actually fixes the
 squeeze; text-length overflow within an already-equal column is still
 our own homegrown code's job. Not yet confirmed on device.
 
+**Half Horizontal restructured: reclaimed right column now holds a
+3-night forecast strip, not wasted space.**
+Original design (verdict left, growing; time/look right, fixed w--72
+column) looked bad in both directions: mostly blank on a quiet night
+(no time/look text at all, rank 0), awkwardly cramped on a busy one
+(two lines squeezed into a narrow fixed column). Considered two
+options: stack everything centered with nothing reserved (simplest), or
+use the reclaimed space for something useful. Went with the latter: the
+left block still grows and centers (verdict, then time/look stacked
+directly underneath when there's anything to say), and the right side
+is now a compact 3-night forecast strip, the same verdict + 3-night
+shape Quadrant already proved works at this height, side by side here
+rather than stacked since 800px has the width for it. Built with the
+Columns component from the start this time (`class="columns"` /
+`class="column"`), not hand-rolled flex, matching the lesson learned
+fixing the other three views' forecast strips. The forecast block is
+wrapped in its own `{% if aurora.forecast and aurora.forecast.size > 0
+%}`, so the left block grows to the full width on its own when there's
+no forecast data at all, not just when rank is 0. Not yet confirmed on
+device.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug
