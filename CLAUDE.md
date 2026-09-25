@@ -38,6 +38,23 @@ Don't assume a change is correct just because it looks right.
   until two items have very different content lengths and one crowds
   out the other. Reach for Grid instead only when spans need to be
   unequal on purpose (`col--span-N`).
+- **Mashup slot dimensions are not fixed, they are derived from the
+  screen's own width/height, which swap under `screen--portrait`.** Do
+  not assume Half Horizontal/Half Vertical/Quadrant only need to look
+  right at their landscape numbers (800x240 / 400x480 / 400x240), a
+  portrait-oriented device gives each of them a genuinely different
+  shape, not a scaled-down version of the same one. Any view whose
+  layout direction (row vs col) would look wrong once notably narrower
+  and taller needs its own `portrait:layout--col` (or equivalent)
+  reflow, the same pattern `full.liquid.txt` and
+  `half_horizontal.liquid.txt` already use, not just Full.
+- **Use `stretch-x`/`stretch-y`, never plain `stretch`,** on anything
+  meant to fill the cross axis of a Layout that might reflow between
+  row and column. They are axis-correct: `stretch-y` means vertical
+  stretch in `layout--row` and automatically means horizontal stretch
+  once `portrait:layout--col` takes over, no separate portrait-specific
+  class needed. They also include `min-width:0`/`min-height:0`
+  protection built in, so do not add that manually alongside them.
 
 ## Adding or editing user-facing text
 

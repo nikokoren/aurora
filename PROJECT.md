@@ -728,6 +728,50 @@ wrapped in its own `{% if aurora.forecast and aurora.forecast.size > 0
 no forecast data at all, not just when rank is 0. Not yet confirmed on
 device.
 
+**Portrait handling was Full-only; wrong assumption, mashup slot shapes
+change with device orientation too.**
+Assumed Half Horizontal/Half Vertical/Quadrant didn't need portrait
+handling since they're fixed mashup-cell sizes, not the whole screen.
+Wrong: confirmed against the actual Screen docs, `--half_horizontal-w/h`
+etc. are calculated from `--screen-w/h`, which swap under
+`screen--portrait`. Half Horizontal is not reliably 800x240, on a
+portrait-oriented device it becomes a genuinely different, much
+narrower and taller shape, not just a smaller version of the same one.
+Added `portrait:layout--col` and `portrait:w--full` to
+`half_horizontal.liquid.txt`, mirroring the exact pattern already
+proven in `full.liquid.txt` (verdict-and-forecast row reflows to
+stacked). Half Vertical and Quadrant were left alone since they're
+already `layout--col` in both orientations, portrait just makes them
+narrower/taller still, no row-to-col reflow needed there, though
+Half Vertical's own map/canvas sizing math should be re-examined if it
+ever looks wrong at very narrow portrait widths (240-ish px).
+
+**Bare "stretch" replaced with axis-correct stretch-y on both map
+canvases.**
+Confirmed against the TRMNL X Guide: plain "stretch" is not the
+axis-aware utility, `stretch-x`/`stretch-y` are, introduced specifically
+for layouts that reflow between row and column. In `layout--row`,
+`stretch-y` stretches vertically; in `layout--col` "the axes are
+swapped" so the same class means horizontal stretch instead, no
+separate portrait-specific class needed on the canvas itself, it just
+tracks the cross axis whichever one that currently is. Also removes the
+need for manually written `min-width:0;min-height:0` inline styles,
+`stretch-x`/`stretch-y` include that protection built in per the same
+guide; removed the redundant manual versions from both
+`full.liquid.txt` and `half_vertical.liquid.txt`'s canvas divs.
+
+**Forecast strip Columns migration and now the portrait reflow: two
+rounds of "go reread the docs, no shortcuts", both real, not
+overcautious.**
+First round (`columns`/`column` instead of hand-rolled flex) fixed
+content that actually broke on device. This round didn't have a
+specific broken screenshot behind it, more a general "are we actually
+using the framework everywhere" audit, but turned up a genuine,
+previously wrong assumption (portrait scope) and a genuine unused
+feature (stretch-x/stretch-y) rather than nothing. Worth taking these
+prompts seriously rather than reflexively defending the existing code.
+Not yet confirmed on device, none of this round has been seen rendered.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

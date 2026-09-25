@@ -1,12 +1,20 @@
 {% comment %}
-  Aurora Watch, Half Vertical view (400x480 on OG). Narrow, tall: visual
-  on top (column layout instead of Full's row, since there is not
-  enough width to sit it beside a text column), verdict and forecast
-  strip stacked underneath. Same toggle as Full (use_real_map), same
-  draw functions verbatim, they already read the container's own
+  Aurora Watch, Half Vertical view (400x480 on OG landscape). Narrow,
+  tall: visual on top (column layout instead of Full's row, since there
+  is not enough width to sit it beside a text column), verdict and
+  forecast strip stacked underneath. Same toggle as Full (use_real_map),
+  same draw functions verbatim, they already read the container's own
   clientWidth/clientHeight rather than assuming Full's dimensions, so
   they work unchanged in a narrower/taller box. Location lives in the
   title bar, same as every other view.
+  Already layout--col in both orientations, no row-to-col reflow
+  needed, portrait just makes this narrower and taller still (mashup
+  dimensions are derived from the screen's own width/height, which swap
+  under screen--portrait). Canvas uses stretch-y (not plain "stretch",
+  which is not axis-aware), the framework's axis-correct utility, same
+  reasoning as full.liquid.txt: it stretches the cross axis, whichever
+  one that currently is, and brings its own min-width:0/min-height:0
+  protection, so the manual inline versions of those were removed.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <script src="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.js"></script>
@@ -14,7 +22,7 @@
 {% endif %}
 {% if aurora.ok %}
 <div class="layout layout--col layout--stretch gap">
-  <div id="aurora-canvas" class="grow stretch" style="position:relative;overflow:hidden;min-width:0;min-height:0">
+  <div id="aurora-canvas" class="grow stretch-y" style="position:relative;overflow:hidden">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}

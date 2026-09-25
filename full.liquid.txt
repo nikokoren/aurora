@@ -8,6 +8,17 @@
   is not preloaded by the runtime, confirmed by testing, not assumption
   this time), so the load stays. Scoped behind the use_real_map toggle so
   it's only fetched when that mode is actually on.
+  Reflows for portrait (portrait:layout--col, portrait:w--full on the
+  info column below): mashup/screen dimensions are derived from the
+  screen's own width/height, which swap under screen--portrait, so this
+  is genuinely a different shape in portrait, not just a smaller
+  version of the same one. The canvas uses stretch-y (not plain
+  "stretch", which is not axis-aware), the framework's axis-correct
+  utility: it means vertical stretch in layout--row and automatically
+  means horizontal stretch once portrait:layout--col takes over, no
+  separate portrait-specific class needed for it, and it brings its own
+  min-width:0/min-height:0 protection so the manual inline versions of
+  those were removed.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <script src="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.js"></script>
@@ -15,7 +26,7 @@
 {% endif %}
 {% if aurora.ok %}
 <div class="layout layout--row portrait:layout--col layout--stretch gap">
-  <div id="aurora-canvas" class="grow stretch" style="position:relative;overflow:hidden;min-width:0;min-height:0">
+  <div id="aurora-canvas" class="grow stretch-y" style="position:relative;overflow:hidden">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}
