@@ -55,6 +55,28 @@ Don't assume a change is correct just because it looks right.
   once `portrait:layout--col` takes over, no separate portrait-specific
   class needed. They also include `min-width:0`/`min-height:0`
   protection built in, so do not add that manually alongside them.
+- **A MapLibre map's `load` event is not reliable for anything that
+  measures the container** (recenter math, anything reading
+  `clientWidth`/`clientHeight`). `idle` is: it fires once rendering has
+  fully finished, `load` can fire before the container's final size has
+  settled, especially in a column layout where the map gets its size
+  from `grow` filling whatever the other children leave. Confirmed on
+  device, not a guess: `load` did nothing for Half Vertical's recenter
+  while `idle` worked correctly, both from byte-identical code.
+  Don't add `load`/`styledata` back as alternative triggers racing
+  `idle` for that same work, even for robustness, they can win the race
+  with a stale size and silently reintroduce the bug `idle` fixed. A
+  flat timeout backing up `idle` (not replacing it) is the right way to
+  add a safety net without that risk.
+- **Handle a slow or failed MapLibre load visibly, don't just poll
+  forever.** MapLibre is a large blocking script; a renderer that
+  captures before it loads, or before the map ever settles, needs
+  something other than a blank canvas. `whenReady()`/`drawMap()` in
+  `full.liquid.txt`/`half_vertical.liquid.txt` detect which library
+  never showed up and show a message naming it, and an outer watchdog
+  covers the case where `TRMNLMaps.watch` itself never calls back.
+  Borrowed from the Nearby Nextbike recipe, which solved this same
+  problem first.
 
 ## Adding or editing user-facing text
 

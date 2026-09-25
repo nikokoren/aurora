@@ -17,6 +17,7 @@
   protection, so the manual inline versions of those were removed.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
+<link rel="preconnect" href="https://trmnl.com" crossorigin>
 <script src="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.js"></script>
 <link href="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.css" rel="stylesheet">
 {% endif %}
@@ -168,11 +169,36 @@
   }
 
   // ---------- mode 2: real map (MapLibre, TRMNLMaps) ----------
-  function whenReady(cb) {
+  // Borrows two ideas from a sibling recipe (Nearby Nextbike) that has
+  // already been through this exact problem: MapLibre is loaded as a
+  // blocking ~1MB script tag, so a renderer that captures before it
+  // finishes, or before the map settles, used to just leave a blank
+  // box, which reads as a broken device rather than a recipe having a
+  // slow minute. Explicit detection of which library never showed up
+  // (rather than polling forever with nothing to show for it), and a
+  // visible fallback message instead of a blank canvas if nothing ever
+  // draws, both borrowed from there. The event-firing strategy is not
+  // borrowed as directly: that recipe treats load and styledata as
+  // interchangeable triggers for the same setup work, but idle is
+  // specifically what fixed Half Vertical's recenter math not applying
+  // (load fired too early there, before the container's final size had
+  // settled), so idle stays the one real trigger here and only a flat
+  // timeout backs it up, not load/styledata racing against it and
+  // potentially winning with the same stale-size problem idle was
+  // chosen to avoid.
+  function mapFallback(mapEl, message) {
+    mapEl.innerHTML = '<div class="flex flex--col flex--center-x flex--center-y h--full w--full">'
+      + '<span class="description">' + message + '</span></div>';
+  }
+
+  function whenReady(mapEl, cb) {
     var tries = 0;
     (function attempt() {
-      if (window.TRMNLMaps && window.maplibregl) return cb();
-      if (++tries > 200) return;
+      var missing = [];
+      if (typeof maplibregl === "undefined") missing.push("maplibregl");
+      if (typeof TRMNLMaps === "undefined") missing.push("TRMNLMaps");
+      if (!missing.length) return cb();
+      if (++tries > 200) { mapFallback(mapEl, "Map unavailable (" + missing.join(", ") + " did not load)"); return; }
       setTimeout(attempt, 50);
     })();
   }
@@ -243,25 +269,17 @@
   function drawMap() {
     var mapEl = document.getElementById("aurora-map");
     if (!mapEl) return;
-    whenReady(function () {
+    whenReady(mapEl, function () {
+      var watchRan = false;
       TRMNLMaps.watch("aurora-map", function () {
+        watchRan = true;
         var map = new maplibregl.Map(TRMNLMaps.options({
           el: "aurora-map", preset: "outline",
           center: [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat],
           zoom: 3,
         }));
         var initialized = false;
-        map.on("idle", function () {
-          // idle fires once the map has fully finished rendering, a
-          // stronger guarantee than load (style+sources ready, but not
-          // necessarily the final container size settled). Worked in
-          // Full on load but did nothing in Half Vertical, confirmed on
-          // device, most likely because Half Vertical's column layout
-          // gives the map its height via "grow" filling whatever space
-          // the text below it leaves, which can settle later than a row
-          // layout's width does. idle can fire more than once
-          // (including from our own setCenter/resize below triggering a
-          // re-render), so this only does its one-time setup once.
+        function setup() {
           if (initialized) return;
           initialized = true;
           // Force MapLibre to resync its internal canvas size with
@@ -287,9 +305,40 @@
           }
           buildAuroraOverlay(map, mapEl);
           TRMNLMaps.dot(map, [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat], { el: "aurora-map", id: "you" });
-        });
+        }
+        // idle fires once the map has fully finished rendering, a
+        // stronger guarantee than load (style+sources ready, but not
+        // necessarily the final container size settled). Worked in
+        // Full on load but did nothing in Half Vertical, confirmed on
+        // device, most likely because Half Vertical's column layout
+        // gives the map its height via "grow" filling whatever space
+        // the text below it leaves, which can settle later than a row
+        // layout's width does. idle can fire more than once (including
+        // from setup's own setCenter/resize triggering a re-render),
+        // hence setup's own initialized guard rather than relying on
+        // this listener firing exactly once.
+        map.on("idle", setup);
+        // idle normally lands well under a second once tiles are
+        // reachable; if it has not fired within 3s, something is off (a
+        // slow or unreachable tile server), draw anyway rather than
+        // leave a bare basemap with no aurora on it indefinitely. Not
+        // load/styledata as an equal alternative trigger racing against
+        // idle: those can fire before the container's final size has
+        // settled, which is the exact problem idle was chosen to avoid,
+        // so this is only a flat timeout, a backstop for idle never
+        // firing at all rather than a second path that could win early
+        // with a stale size.
+        setTimeout(setup, 3000);
         return map;
       });
+      // Outer watchdog: if TRMNLMaps.watch's own callback never ran at
+      // all, none of the above ever had a chance to fire either, idle,
+      // the 3s fallback, none of it. Say so rather than leave the area
+      // however the bare framework element rendered before any of this
+      // ran.
+      setTimeout(function () {
+        if (!watchRan) mapFallback(mapEl, "Map did not initialize");
+      }, 6000);
     });
   }
 

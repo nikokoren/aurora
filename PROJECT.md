@@ -772,6 +772,57 @@ feature (stretch-x/stretch-y) rather than nothing. Worth taking these
 prompts seriously rather than reflexively defending the existing code.
 Not yet confirmed on device, none of this round has been seen rendered.
 
+**Map loading made robust against a slow/failed MapLibre load, borrowed
+from the Nearby Nextbike recipe, not designed from scratch.**
+That recipe has already been through this exact problem (MapLibre is a
+blocking ~1MB script tag) and handles it with patterns we didn't have at
+all: explicit detection of which global never showed up
+(`maplibregl`/`TRMNLMaps`) rather than polling forever with nothing to
+show for it, a visible fallback message instead of a blank canvas if
+nothing ever draws, and a watchdog for the case where `TRMNLMaps.watch`
+itself never calls back (a different, outer failure mode from "the map
+loaded but never settled"). Adopted all three: `whenReady()` now shows
+"Map unavailable (...)" naming whichever library is missing if it gives
+up after ~10s instead of silently doing nothing; a `mapFallback()`
+helper shows a message in the map area rather than leaving it blank;
+an outer watchdog fires at 6s if `watch`'s callback never ran at all.
+Also added `<link rel="preconnect" href="https://trmnl.com" crossorigin>`
+before the MapLibre script/stylesheet, cheap and safe, buys back DNS/TLS
+round trips against a large blocking download.
+
+Did not copy that recipe's event-triggering strategy directly: it treats
+`load` and `styledata` as interchangeable triggers for the same setup
+work, racing whichever fires first. We specifically know `load` is
+unreliable for our recenter math in Half Vertical (that's the entire
+reason `idle` was adopted a few commits back), so adding `load` back as
+an equal alternative would risk it winning the race with a stale
+container size and silently reintroducing that exact bug. Kept `idle`
+as the only real trigger, backed by a flat 3s timeout as a safety net
+for "idle never fires at all" rather than a second path that could fire
+early with the same stale-size problem idle was chosen to avoid.
+Extracted the setup work (resize, recenter, overlay, dot) the idle
+handler and the timeout fallback both used to duplicate into one
+`setup()` function with its own `initialized` guard, called from either
+trigger, so exactly-once semantics hold regardless of which one fires
+first; the previous version had this logic copy-pasted twice, a real
+risk of the two drifting apart.
+
+Tested the guard logic in isolation (not the real MapLibre behavior,
+which needs a live browser) with mocked trigger orderings: idle-then-
+timeout only runs setup once, timeout-only still runs it, and a `watch`
+callback that never fires shows the fallback message and runs setup
+zero times, all as intended. Not yet confirmed on device; this is meant
+to make failure visible and graceful, not something a normal successful
+render should ever exercise.
+
+The `<link rel="stylesheet">`/`<script src>` "layout-risk" warning the
+editor shows for the MapLibre import is not eliminated by any of this,
+and does not appear to be avoidable: the Nearby Nextbike recipe uses the
+identical pattern and presumably shows the same warning. It looks like
+an inherent property of loading any external library this way, not
+something either recipe did wrong; the point of this change is handling
+the consequences gracefully, not suppressing the warning itself.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug
