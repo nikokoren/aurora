@@ -868,6 +868,51 @@ isolate whether this is stretch-y/portrait specifically or something
 in our own added code, not yet tested. Not yet confirmed fixed for
 Half Vertical specifically.
 
+**Half Vertical's map script reverted to the pre-stretch-y,
+pre-robust-loading version, confirmed working on device. The two files'
+map scripts are now genuinely different, not accidentally, and that's
+worth taking seriously as a signal.**
+Every "fix" applied to Half Vertical since the original idle-vs-load fix
+(plain "stretch" -> stretch-y -> stretch-y portrait:stretch-x, then the
+whole robust-loading rewrite: explicit missing-library detection,
+mapFallback(), multi-layer watchdog, forced map.resize() calls) was
+reported broken on device: "your half vertical code actually broke the
+map." The version confirmed actually working is the simpler one from
+right after the idle fix: plain `class="grow stretch"` (not stretch-y),
+manual inline min-width:0/min-height:0 (not removed), and `map.on("idle",
+...)` with no timeout fallback, no watchdog, no resize() forcing. Adopted
+that version verbatim for `half_vertical.liquid.txt`, no further
+tweaking on top of it.
+
+This means the two files' map scripts are no longer byte-identical,
+after several commits explicitly maintaining and verifying that they
+were. That discipline is intentionally broken now, don't "fix" it by
+re-syncing them without addressing the actual question first: why did
+the same category of change work for Full (portrait:stretch-x was
+confirmed fixing Full's blank-portrait-map bug) but broke Half Vertical?
+Two live possibilities, neither confirmed: (a) something genuinely
+different between the two files' situations (Full reflows row-to-col via
+portrait:, Half Vertical is unconditionally col, so "the same fix"
+was never actually the same change in effect), or (b) it was never
+really about stretch-x/y at all, and the robust-loading rewrite (forced
+resize(), extra timers) is what actually broke things, in which case
+Full may be quietly carrying the same fragility and just hasn't been
+retested since that layer was added.
+
+Worth Niko retesting Full specifically before assuming it's still fine;
+"portrait:stretch-x fixed Full" was confirmed before the robust-loading
+rewrite landed on top of it, not after.
+
+**The forecast strip's alignment in this reverted version (`flex
+flex--col text--center fit-text` wrapper per night, `value--xsmall`, no
+data-value-fit attributes at all) was called out as doing a better job
+than the Columns-based version built earlier in this same session for
+Full/Quadrant/Half Horizontal.** Not yet propagated to those other
+three views; worth doing if this holds up, but given the pattern above
+(several "improvements" in a row turning out to be regressions), better
+to let Niko confirm this is genuinely better before changing three more
+files to match it, rather than assuming.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

@@ -68,15 +68,35 @@ Don't assume a change is correct just because it looks right.
   with a stale size and silently reintroduce the bug `idle` fixed. A
   flat timeout backing up `idle` (not replacing it) is the right way to
   add a safety net without that risk.
-- **Handle a slow or failed MapLibre load visibly, don't just poll
-  forever.** MapLibre is a large blocking script; a renderer that
-  captures before it loads, or before the map ever settles, needs
-  something other than a blank canvas. `whenReady()`/`drawMap()` in
-  `full.liquid.txt`/`half_vertical.liquid.txt` detect which library
-  never showed up and show a message naming it, and an outer watchdog
-  covers the case where `TRMNLMaps.watch` itself never calls back.
-  Borrowed from the Nearby Nextbike recipe, which solved this same
-  problem first.
+- **`full.liquid.txt` and `half_vertical.liquid.txt`'s map scripts are
+  no longer byte-identical, and that is deliberate, not an oversight to
+  fix.** They were kept identical for a long stretch of this project,
+  worth re-checking that discipline before assuming it, but every
+  robustness layer added on top of the working idle-based fix (plain
+  `stretch` -> `stretch-y` -> `stretch-y portrait:stretch-x`, then
+  explicit missing-library detection, a fallback message, a watchdog,
+  forced `map.resize()` calls) was confirmed to break Half Vertical's
+  map on device, "your half vertical code actually broke the map."
+  Half Vertical was reverted to the simpler version from right after
+  the idle fix: plain `stretch`, manual inline
+  `min-width:0`/`min-height:0`, `idle` with no timeout/watchdog/forced
+  resize. Full still has all of that layered on, `portrait:stretch-x`
+  was confirmed fixing Full's own blank-portrait-map bug, but that
+  confirmation predates the robust-loading rewrite being added on top,
+  it has not been separately reverified since. Before adding anything
+  else to either file's map handling: confirm it actually helps on
+  device first, several changes in a row here looked like reasonable
+  improvements and were regressions instead. If in doubt, the simpler
+  Half Vertical version is the one currently known to work.
+- Handle a slow or failed MapLibre load visibly, don't just poll
+  forever, when doing so doesn't risk the regression above. MapLibre is
+  a large blocking script; a renderer that captures before it loads, or
+  before the map ever settles, needs something other than a blank
+  canvas. `full.liquid.txt` currently does this (detects which library
+  never showed up and shows a message naming it, plus an outer watchdog
+  for `TRMNLMaps.watch` never calling back), borrowed from the Nearby
+  Nextbike recipe. `half_vertical.liquid.txt` does not, per the point
+  above.
 
 ## Adding or editing user-facing text
 
