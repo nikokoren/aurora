@@ -1,0 +1,39 @@
+- keyname: lat_lon
+  field_type: lat_lon
+  name: Location
+  description: Search for a city or postal code, or provide a comma-separated lat/long.
+  default: "48.1351,11.5820"
+  optional: false
+
+- keyname: location_name
+  field_type: string
+  name: Location name
+  description: Shown on the screen. Leave empty to show the coordinates.
+  optional: true
+
+- keyname: use_real_map
+  field_type: boolean
+  name: Use real map
+  description: Show a real OpenStreetMap tile map instead of the abstract polar chart.
+  default: "false"
+  optional: true
+
+- keyname: voice
+  field_type: select
+  name: Voice
+  description: How the verdict is worded. Numbers (times, Kp) stay the same either way.
+  options:
+    - facts
+    - astrophysicist
+  default: facts
+  optional: true
+
+- keyname: language
+  field_type: select
+  name: Language
+  description: Screen language.
+  options:
+    - en
+    - de
+  default: en
+  optional: true

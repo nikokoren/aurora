@@ -1,0 +1,263 @@
+{% comment %}
+  Aurora Watch, Half Vertical view (400x480 on OG). Narrow, tall: visual
+  on top (column layout instead of Full's row, since there is not
+  enough width to sit it beside a text column), verdict and forecast
+  strip stacked underneath. Same toggle as Full (use_real_map), same
+  draw functions verbatim, they already read the container's own
+  clientWidth/clientHeight rather than assuming Full's dimensions, so
+  they work unchanged in a narrower/taller box. Location lives in the
+  title bar, same as every other view.
+{% endcomment %}
+{% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
+<script src="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.js"></script>
+<link href="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.css" rel="stylesheet">
+{% endif %}
+{% if aurora.ok %}
+<div class="layout layout--col layout--stretch gap">
+  <div id="aurora-canvas" class="grow stretch" style="position:relative;overflow:hidden;min-width:0;min-height:0">
+    {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
+    <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
+    {% endif %}
+  </div>
+  <div class="flex flex--col flex--center text--center gap shrink-0">
+    <span class="value value--large fit-text" data-value-fit="true" data-value-fit-max-height="90">{{ aurora.verdict | upcase }}</span>
+    {% if aurora.level > 0 %}
+    <span class="title title--small">{{ aurora.line }}</span>
+    <span class="description">{{ aurora.look }}</span>
+    {% endif %}
+    {% if aurora.forecast and aurora.forecast.size > 0 %}
+    <div class="divider"></div>
+    <div class="flex flex--row flex--center-x gap">
+      {% for night in aurora.forecast %}
+      <div class="flex flex--col flex--center-x gap--small" style="min-width:0">
+        <span class="label">{{ night.label | upcase }}</span>
+        <span class="value value--small fit-text" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+  <span class="instance">{{ aurora.name | upcase }}</span>
+</div>
+{% else %}
+<div class="layout layout--col layout--center text--center gap">
+  <span class="value value--base">No data</span>
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+</div>
+{% endif %}
+<script type="text/javascript">
+(function () {
+  // The framework's own Fit Value runtime (data-value-fit) doesn't
+  // appear to execute in TRMNL's actual render pipeline, confirmed on
+  // device: a forecast verdict word visibly overflowed its column on a
+  // fresh render even with the attribute set. Rather than depend on
+  // framework JS we can't verify runs, shrink these ourselves with a
+  // small function in our own script, which does reliably execute here
+  // (the map, TRMNLPaint colors, all of it). data-value-fit is left in
+  // place too, harmless, in case it ever does fire.
+  function shrinkToFit(el, minPx) {
+    if (!el) return;
+    var container = el.parentElement;
+    if (!container) return;
+    var guard = 0;
+    while (el.scrollWidth > container.clientWidth + 1 && guard < 60) {
+      var size = parseFloat(window.getComputedStyle(el).fontSize);
+      if (!size || size <= minPx) break;
+      el.style.fontSize = (size - 1) + "px";
+      guard++;
+    }
+  }
+  var els = document.querySelectorAll(".fit-text");
+  for (var i = 0; i < els.length; i++) shrinkToFit(els[i], 14);
+})();
+</script>
+<script type="text/javascript">
+(function () {
+  var A = {{ aurora | json }};
+  var USE_MAP = {{ trmnl.plugin_settings.custom_fields_values.use_real_map | default: false }};
+  var el = document.getElementById("aurora-canvas");
+
+  // ---------- shared helpers ----------
+  function px(n, kind) { return (window.TRMNLPaint) ? TRMNLPaint.px(n, { el: el, kind: kind }) : n; }
+  function colorOf(v, fallback) { if (v && typeof v === "object") v = v.color; return v || fallback; }
+  function ink() { try { return colorOf(TRMNLPaint.textColor("default", { el: el }), "#000"); } catch (e) { return "#000"; } }
+  function paper() { try { return colorOf(TRMNLPaint.semantic("canvas", { el: el }), "#fff"); } catch (e) { return "#fff"; } }
+  // Aurora colors: green is the body of a real aurora (oxygen glow), pink
+  // the rarer high-altitude fringe seen only in strong displays. Both
+  // resolve through TRMNLPaint.bg(), which is why no device branching is
+  // needed here: a color panel gets green/pink, a limited 4-color panel
+  // (BWRY) gets whichever of its 4 inks the framework maps those hues to,
+  // and the plain 1-bit OG falls back to ink() automatically.
+  function auroraGreen() { try { return colorOf(TRMNLPaint.bg("green", { el: el }), ink()); } catch (e) { return ink(); } }
+  function auroraPink() { try { return colorOf(TRMNLPaint.bg("pink", { el: el }), ink()); } catch (e) { return ink(); } }
+  // A mid gray, not full black, for the dot casing: dark enough to
+  // separate from white land, light enough not to swallow small dots.
+  // The framework's own docs call this exact technique out ("intermediate
+  // steps... subtler contrasts... especially on 2-bit and 4-bit
+  // displays") rather than always reaching for the darkest ink available.
+  function ringGray() { try { return colorOf(TRMNLPaint.bg("gray-35", { el: el }), ink()); } catch (e) { return ink(); } }
+
+  // ---------- mode 1: abstract polar chart (SVG) ----------
+  function drawPolar() {
+    // Guard against measuring before layout has actually sized this box:
+    // a stale 0x0 read would otherwise force the old fixed 440x400
+    // fallback below, which can draw larger than the real container and
+    // spill into neighboring content. Retry a few times first; only fall
+    // back to a fixed size if the box still isn't laid out after that.
+    if ((!el.clientWidth || !el.clientHeight) && drawPolar.tries === undefined) drawPolar.tries = 0;
+    if ((!el.clientWidth || !el.clientHeight) && drawPolar.tries < 10) {
+      drawPolar.tries++;
+      setTimeout(drawPolar, 50);
+      return;
+    }
+    var G = A.grid;
+    var W = el.clientWidth || 440, H = el.clientHeight || 400;
+    var C = ink(), P = paper(), GN = auroraGreen(), PK = auroraPink(), RG = ringGray();
+    var R = Math.floor(Math.min(W, H) / 2) - px(4);
+    var cx = Math.round(W / 2), cy = Math.round(H / 2);
+    var sign = G.hemi > 0 ? 1 : -1;
+    var rad = Math.PI / 180;
+    var out = [];
+    var lastRow = Math.ceil(G.max_colat / G.step_lat);
+    var radial = G.step_lat / G.max_colat * R;
+    for (var i = 0; i < lastRow; i++) {
+      var r = (i + 0.5) * G.step_lat / G.max_colat * R;
+      for (var j = 0; j < G.cols; j++) {
+        var d = +G.cells.charAt(i * G.cols + j);
+        if (!d) continue;
+        var th = ((j + 0.5) * G.step_lon - A.user_lon) * rad * sign;
+        var cell = Math.min(radial, r * G.step_lon * rad);
+        var s = Math.max(2, Math.round(cell * (0.25 + 0.75 * d / 9)));
+        var x = Math.round(cx + r * Math.sin(th) - s / 2);
+        var y = Math.round(cy + r * Math.cos(th) - s / 2);
+        // Mostly green (the real color of an aurora's main glow); an
+        // occasional pink pick only at the highest intensity, the rarer
+        // high-altitude fringe a strong display shows. A mid-gray casing
+        // (not black, too heavy for a cell this small) so a light fill
+        // still separates from the plain white canvas behind it, not
+        // just from a colored background.
+        var fillC = (d >= 6 && Math.random() < 0.5) ? PK : GN;
+        out.push('<rect x="' + x + '" y="' + y + '" width="' + s + '" height="' + s + '" fill="' + fillC + '" stroke="' + RG + '" stroke-width="0.75"/>');
+      }
+    }
+    var cells = out.join("");
+    var ru = Math.min(G.user_colat, G.max_colat) / G.max_colat * R;
+    var rim = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + C + '" stroke-width="' + px(2) + '"/>';
+    var ring = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ru + '" fill="none" stroke="' + C + '" stroke-width="1" stroke-dasharray="' + px(2) + ' ' + px(6) + '"/>';
+    var ux = cx, uy = Math.round(cy + ru);
+    var you =
+      '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(12) + '" fill="' + P + '" stroke="' + C + '" stroke-width="' + px(2) + '"/>' +
+      '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(6) + '" fill="' + C + '"/>';
+    el.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '"' +
+      ' shape-rendering="crispEdges" style="position:absolute;top:0;left:0">' +
+      ring + cells + rim + you + '</svg>';
+  }
+
+  // ---------- mode 2: real map (MapLibre, TRMNLMaps) ----------
+  function whenReady(cb) {
+    var tries = 0;
+    (function attempt() {
+      if (window.TRMNLMaps && window.maplibregl) return cb();
+      if (++tries > 200) return;
+      setTimeout(attempt, 50);
+    })();
+  }
+
+  // Aurora intensity 0 to 9, drawn as a stochastic stipple projected onto
+  // the real map with map.project(): several small, jittered circles per
+  // cell instead of one grid-aligned square, the same trick halftone
+  // printing uses to fake a soft gradient out of flat ink. Denser and
+  // slightly larger dots where intensity is higher; sparse single dots at
+  // the edges so the shape fades out instead of stopping at a hard grid
+  // line. Draws into an SVG overlay laid over the map canvas.
+  function buildAuroraOverlay(map, mapEl) {
+    var G = A.geo_grid;
+    if (!G || !G.cells) return;
+    var W = mapEl.clientWidth, H = mapEl.clientHeight;
+    if (!W || !H) return;
+    var GN = auroraGreen(), PK = auroraPink(), RG = ringGray();
+    var ringW = px(1);
+    var out = [];
+    for (var i = 0; i < G.rows; i++) {
+      var la = G.lat0 + i * G.step_lat;
+      var h = G.step_lat / 2, w = G.step_lon / 2;
+      for (var j = 0; j < G.cols; j++) {
+        var d = +G.cells.charAt(i * G.cols + j);
+        if (!d) continue;
+        var lo = G.lon0 + j * G.step_lon;
+        var p0 = map.project([lo - w, la - h]);
+        var p1 = map.project([lo + w, la + h]);
+        var cx = (p0.x + p1.x) / 2, cy = (p0.y + p1.y) / 2;
+        if (cx < -20 || cx > W + 20 || cy < -20 || cy > H + 20) continue;
+        var cw = Math.abs(p1.x - p0.x), ch = Math.abs(p1.y - p0.y);
+        var rBase = Math.max(0.6, Math.min(cw, ch) * 0.26);
+        var n = Math.max(1, Math.round(d / 2.2));
+        var fillC = (d >= 6 && Math.random() < 0.5) ? PK : GN;
+        for (var k = 0; k < n; k++) {
+          var jx = (Math.random() - 0.5) * cw * 0.75;
+          var jy = (Math.random() - 0.5) * ch * 0.75;
+          var r = rBase * (0.55 + 0.45 * d / 9) * (0.75 + Math.random() * 0.5);
+          // A thin mid-gray casing around each dot, the same contrast-ring
+          // trick TRMNLMaps.dot() uses for its own markers, so the aurora
+          // reads apart from whatever's under it. Gray, not black: full
+          // ink() worked but overpowered a dot this small; a mid-gray
+          // still separates from white land and the gray water/tiles
+          // without the ring dominating the fill inside it.
+          out.push('<circle cx="' + (cx + jx).toFixed(1) + '" cy="' + (cy + jy).toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + fillC + '" stroke="' + RG + '" stroke-width="' + ringW + '"/>');
+        }
+      }
+    }
+    var svg = document.createElement("div");
+    svg.style.cssText = "position:absolute;inset:0;pointer-events:none";
+    svg.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+      out.join("") + '</svg>';
+    mapEl.appendChild(svg);
+  }
+
+  // Forcing the map to grayscale ourselves (a CSS filter, then rewriting
+  // the MapLibre style's own colors before the map painted, several
+  // variants of that) turned out to be solving a problem that mostly
+  // didn't exist and creating a worse one: confirmed by a bare, fully
+  // untouched preset rendering correctly (gray water, dark borders,
+  // device-appropriate colors) with no intervention at all, while
+  // mutating the style object, regardless of exactly how, broke that
+  // same rendering (water disappearing, borders fading to the thin
+  // default line). TRMNLMaps already resolves colors per device on its
+  // own; the map preset is left alone now rather than rewritten.
+
+  function drawMap() {
+    var mapEl = document.getElementById("aurora-map");
+    if (!mapEl) return;
+    whenReady(function () {
+      TRMNLMaps.watch("aurora-map", function () {
+        var map = new maplibregl.Map(TRMNLMaps.options({
+          el: "aurora-map", preset: "outline",
+          center: [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat],
+          zoom: 3,
+        }));
+        map.on("load", function () {
+          buildAuroraOverlay(map, mapEl);
+          TRMNLMaps.dot(map, [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat], { el: "aurora-map", id: "you" });
+        });
+        return map;
+      });
+    });
+  }
+
+  // ---------- entry point ----------
+  if (USE_MAP) {
+    drawMap();
+  } else if (window.TRMNLPaint && TRMNLPaint.watch) {
+    TRMNLPaint.watch(el, drawPolar);
+  } else {
+    drawPolar();
+  }
+})();
+</script>

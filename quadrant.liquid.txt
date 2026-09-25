@@ -1,0 +1,62 @@
+{% comment %}
+  Aurora Watch, Quadrant view (400x240 on OG). Only ever shown inside a
+  Mashup next to other plugins, so the title bar earns its place, it is
+  the only thing identifying this tile as Aurora Watch. Location name
+  lives there too (bottom right), not repeated in the body.
+  Verdict length varies a lot ("Unlikely" vs "Slim, but possible" vs
+  "Excellent chance"), so data-value-fit-max-height lets it wrap and
+  shrink to fit instead of guessing one font size that works for all of
+  them. The 3-night strip underneath mirrors Full: full label, written-
+  out verdict, no Kp number, confirmed on device there's room for it at
+  this width.
+{% endcomment %}
+{% if aurora.ok %}
+<div class="layout layout--col layout--center text--center gap">
+  <span class="value value--large fit-text" data-value-fit="true" data-value-fit-max-height="70">{{ aurora.verdict | upcase }}</span>
+  {% if aurora.forecast and aurora.forecast.size > 0 %}
+  <div class="divider"></div>
+  <div class="flex flex--row flex--center-x gap--small">
+    {% for night in aurora.forecast %}
+    <div class="flex flex--col flex--center-x" style="min-width:0">
+      <span class="label">{{ night.label | upcase }}</span>
+      <span class="value value--small fit-text" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+  <span class="instance">{{ aurora.name | upcase }}</span>
+</div>
+<script type="text/javascript">
+(function () {
+  // Same reasoning as full.liquid.txt: the framework's own Fit Value
+  // runtime doesn't appear to execute in TRMNL's actual render
+  // pipeline, confirmed on device, so this view shrinks its own verdict
+  // text rather than depending on it. data-value-fit left in place too,
+  // harmless, in case it ever does fire.
+  function shrinkToFit(el, minPx) {
+    if (!el) return;
+    var container = el.parentElement;
+    if (!container) return;
+    var guard = 0;
+    while (el.scrollWidth > container.clientWidth + 1 && guard < 60) {
+      var size = parseFloat(window.getComputedStyle(el).fontSize);
+      if (!size || size <= minPx) break;
+      el.style.fontSize = (size - 1) + "px";
+      guard++;
+    }
+  }
+  var els = document.querySelectorAll(".fit-text");
+  for (var i = 0; i < els.length; i++) shrinkToFit(els[i], 14);
+})();
+</script>
+{% else %}
+<div class="layout layout--col layout--center text--center gap">
+  <span class="value value--base">No data</span>
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+</div>
+{% endif %}

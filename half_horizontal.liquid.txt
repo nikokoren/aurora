@@ -1,0 +1,57 @@
+{% comment %}
+  Aurora Watch, Half Horizontal view (800x240 on OG). Wide, short:
+  verdict large on the left, the time window and compass hint compact
+  on the right. No forecast strip and no visual here, neither fits this
+  little height without feeling cramped, that's Full (and Half
+  Vertical, once decided) territory. Location lives in the title bar
+  (bottom right), same as every other view.
+  Verdict length varies a lot, same reasoning as Quadrant: fit-to-box
+  instead of one fixed font size.
+{% endcomment %}
+{% if aurora.ok %}
+<div class="layout layout--row layout--stretch gap">
+  <div class="flex flex--col flex--center grow">
+    <span class="value value--xlarge fit-text" data-value-fit="true" data-value-fit-max-height="150">{{ aurora.verdict | upcase }}</span>
+  </div>
+  <div class="flex flex--col flex--center text--center gap--small shrink-0 w--72">
+    {% if aurora.level > 0 %}
+    <span class="title title--small">{{ aurora.line }}</span>
+    <span class="description">{{ aurora.look }}</span>
+    {% endif %}
+  </div>
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+  <span class="instance">{{ aurora.name | upcase }}</span>
+</div>
+<script type="text/javascript">
+(function () {
+  // Same reasoning as full.liquid.txt: the framework's own Fit Value
+  // runtime doesn't appear to execute in TRMNL's actual render
+  // pipeline, confirmed on device, so this view shrinks its own verdict
+  // text rather than depending on it. data-value-fit left in place too,
+  // harmless, in case it ever does fire.
+  function shrinkToFit(el, minPx) {
+    if (!el) return;
+    var container = el.parentElement;
+    if (!container) return;
+    var guard = 0;
+    while (el.scrollWidth > container.clientWidth + 1 && guard < 60) {
+      var size = parseFloat(window.getComputedStyle(el).fontSize);
+      if (!size || size <= minPx) break;
+      el.style.fontSize = (size - 1) + "px";
+      guard++;
+    }
+  }
+  var els = document.querySelectorAll(".fit-text");
+  for (var i = 0; i < els.length; i++) shrinkToFit(els[i], 14);
+})();
+</script>
+{% else %}
+<div class="layout layout--col layout--center text--center gap">
+  <span class="value value--base">No data</span>
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+</div>
+{% endif %}
