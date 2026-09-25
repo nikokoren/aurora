@@ -823,6 +823,31 @@ an inherent property of loading any external library this way, not
 something either recipe did wrong; the point of this change is handling
 the consequences gracefully, not suppressing the warning itself.
 
+**Map went blank in portrait, stretch-y's automatic axis-swap doesn't
+seem to handle a portrait:layout--col reflow correctly.**
+Confirmed on device: space was still correctly reserved for the canvas
+(grow's height allocation worked fine), but the map itself never
+rendered visibly, not even our new fallback message, consistent with
+the canvas collapsing to near-zero width rather than a JS failure
+(a JS failure should have eventually shown the fallback text). Suspect
+axis-correction keys off the literal `layout--col` class on the
+ancestor, and since our markup keeps `layout--row` present at all
+times (`portrait:layout--col` is a separate responsive class added
+alongside it, a reflow override, not a replacement of the base class),
+it may never recognize the computed direction has actually flipped.
+Not confirmed against the framework's internals, this is the most
+plausible read of the symptom, not a certainty.
+Fixed by not depending on the automatic detection for this specific
+combination: `stretch-y portrait:stretch-x` states explicitly what
+should happen in portrait instead of inferring it from the ancestor's
+class. Only `full.liquid.txt` needed this, `half_vertical.liquid.txt`
+is always `layout--col`, no row-to-col switch happens there so there is
+no ambiguous class combination for stretch-y's detection to get wrong
+in the first place.
+Not yet confirmed fixed on device, this is the second attempt at
+portrait-mode map visibility specifically; treat as real only once
+actually seen working in portrait.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

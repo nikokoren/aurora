@@ -12,13 +12,25 @@
   info column below): mashup/screen dimensions are derived from the
   screen's own width/height, which swap under screen--portrait, so this
   is genuinely a different shape in portrait, not just a smaller
-  version of the same one. The canvas uses stretch-y (not plain
-  "stretch", which is not axis-aware), the framework's axis-correct
-  utility: it means vertical stretch in layout--row and automatically
-  means horizontal stretch once portrait:layout--col takes over, no
-  separate portrait-specific class needed for it, and it brings its own
+  version of the same one. The canvas uses stretch-y plus an explicit
+  portrait:stretch-x (not plain "stretch", which is not axis-aware),
+  the framework's axis-correct utility. The auto-swap ("stretch-y means
+  vertical in layout--row, horizontal once layout--col takes over") was
+  tried alone first and produced a blank map area in portrait,
+  confirmed on device: space was still correctly reserved (grow's
+  height allocation worked), the map itself just never rendered
+  visibly, consistent with the canvas collapsing to near-zero width.
+  Suspect the axis-correction keys off the literal layout--col class on
+  the ancestor, and since our markup keeps layout--row present at all
+  times (portrait:layout--col is a separate responsive class added
+  alongside it, not a replacement), it may never recognize the
+  computed direction has actually flipped. Not confirmed against the
+  framework's internals, just the most plausible read of the symptom.
+  Not depending on the automatic detection handling that combination:
+  explicit portrait:stretch-x states outright what should happen in
+  portrait rather than inferring it. Still brings its own
   min-width:0/min-height:0 protection so the manual inline versions of
-  those were removed.
+  those stay removed.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <link rel="preconnect" href="https://trmnl.com" crossorigin>
@@ -27,7 +39,7 @@
 {% endif %}
 {% if aurora.ok %}
 <div class="layout layout--row portrait:layout--col layout--stretch gap">
-  <div id="aurora-canvas" class="grow stretch-y" style="position:relative;overflow:hidden">
+  <div id="aurora-canvas" class="grow stretch-y portrait:stretch-x" style="position:relative;overflow:hidden">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}
