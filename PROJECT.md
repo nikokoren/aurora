@@ -655,6 +655,32 @@ general `.fit-text`/`shrinkToFit` protection added earlier still
 matters for whatever else might be long). No structural or logic
 changes. Adopted verbatim as the new file.
 
+**Map recentering worked in Full, did nothing in Half Vertical, on
+"load" vs "idle".**
+Confirmed on device: same script (byte-identical between both files,
+checked as always), but the shift only took effect in Full. The aurora
+overlay and the "you are here" marker rendered correctly in both, so
+MapLibre itself was fine, only the recenter call was a no-op in Half
+Vertical specifically. Best-grounded explanation, not confirmed against
+MapLibre's internals directly: Half Vertical's map gets its height from
+"grow" filling whatever space the text below it leaves in a column
+layout, which can settle later than a row layout's width does; `load`
+fires once style and sources are ready, but not necessarily once the
+container's final size has. Switched from `load` to `idle` (a stronger
+guarantee, fires only once the map has fully finished rendering) with a
+one-time guard (`idle` can fire more than once, including from our own
+`setCenter`/`resize` below triggering a re-render), and added an
+explicit `map.resize()` right before measuring, forcing MapLibre to
+resync its internal canvas size with the container's current DOM
+measurements regardless of exactly when either settled. Order within
+the handler is unchanged and still matters: recenter first, then
+buildAuroraOverlay and the "you are here" marker, since the overlay is
+baked as static SVG at draw time from whatever the view is at that
+moment, not dynamically re-projected if the map pans later.
+Not yet confirmed on device that this actually fixes Half Vertical
+specifically; the reasoning is sound but this is the second attempt at
+this exact bug, so treat it as a real fix only once seen working.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

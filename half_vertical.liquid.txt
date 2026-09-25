@@ -242,7 +242,41 @@
           center: [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat],
           zoom: 3,
         }));
-        map.on("load", function () {
+        var initialized = false;
+        map.on("idle", function () {
+          // idle fires once the map has fully finished rendering, a
+          // stronger guarantee than load (style+sources ready, but not
+          // necessarily the final container size settled). Worked in
+          // Full on load but did nothing in Half Vertical, confirmed on
+          // device, most likely because Half Vertical's column layout
+          // gives the map its height via "grow" filling whatever space
+          // the text below it leaves, which can settle later than a row
+          // layout's width does. idle can fire more than once
+          // (including from our own setCenter/resize below triggering a
+          // re-render), so this only does its one-time setup once.
+          if (initialized) return;
+          initialized = true;
+          // Force MapLibre to resync its internal canvas size with
+          // whatever the container's current DOM measurements actually
+          // are, in case that's what was stale, before trusting either
+          // for the recenter math.
+          map.resize();
+          // Bias the view so the user's own spot sits in the outer third
+          // of the screen, not dead center: what matters is the sky
+          // between the viewer and their own pole, not what's behind
+          // them. Bottom third north of the equator (more room above,
+          // toward the north pole), flipped to the top third south of
+          // it. The map is currently centered exactly on the user (that
+          // is what "center" above was), so unproject() the screen point
+          // that should become the new center, at the same zoom, and
+          // recentering there pushes the user's own location to the
+          // target screen position, a pure pixel-space translation.
+          var W = mapEl.clientWidth, H = mapEl.clientHeight;
+          if (W && H) {
+            var frac = A.grid.hemi > 0 ? 0.75 : 0.25;
+            var target = map.unproject([W / 2, H * (1 - frac)]);
+            map.setCenter(target);
+          }
           buildAuroraOverlay(map, mapEl);
           TRMNLMaps.dot(map, [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat], { el: "aurora-map", id: "you" });
         });
