@@ -10,11 +10,20 @@
   Already layout--col in both orientations, no row-to-col reflow
   needed, portrait just makes this narrower and taller still (mashup
   dimensions are derived from the screen's own width/height, which swap
-  under screen--portrait). Canvas uses stretch-y (not plain "stretch",
-  which is not axis-aware), the framework's axis-correct utility, same
-  reasoning as full.liquid.txt: it stretches the cross axis, whichever
-  one that currently is, and brings its own min-width:0/min-height:0
-  protection, so the manual inline versions of those were removed.
+  under screen--portrait). Canvas uses stretch-y plus an explicit
+  portrait:stretch-x (not plain "stretch", which is not axis-aware).
+  The plain "it auto-swaps to the cross axis" reasoning doesn't fully
+  hold up: this file is unconditionally layout--col, no row/col
+  ambiguity like full.liquid.txt had, and it went blank in portrait
+  too, space correctly reserved, nothing rendered inside it, same
+  symptom. So whatever's actually going on is not specific to a
+  row-vs-col ambiguity, it seems to be screen--portrait itself
+  interacting badly with the automatic version regardless of layout
+  direction. Confirmed fix pattern from full.liquid.txt (explicit
+  portrait: override instead of relying on the automatic swap) applied
+  here too, not yet independently confirmed working for this file
+  specifically. Still brings its own min-width:0/min-height:0
+  protection, so the manual inline versions of those stay removed.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <link rel="preconnect" href="https://trmnl.com" crossorigin>
@@ -23,7 +32,7 @@
 {% endif %}
 {% if aurora.ok %}
 <div class="layout layout--col layout--stretch gap">
-  <div id="aurora-canvas" class="grow stretch-y" style="position:relative;overflow:hidden">
+  <div id="aurora-canvas" class="grow stretch-y portrait:stretch-x" style="position:relative;overflow:hidden">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}

@@ -848,6 +848,26 @@ Not yet confirmed fixed on device, this is the second attempt at
 portrait-mode map visibility specifically; treat as real only once
 actually seen working in portrait.
 
+**Half Vertical had the same blank-map-in-portrait bug, which
+disproves the specific ambiguity theory used to fix Full, applied the
+same fix anyway since Full's actual confirmed on device.**
+Full's fix (explicit `portrait:stretch-x`) was confirmed working on
+device. But Half Vertical showed the identical symptom despite having
+no `layout--row` anywhere in its markup, unconditionally `layout--col`,
+so the "ancestor still has the literal layout--row class" theory cannot
+be the (sole) mechanism, something else common to both is going on,
+most likely `screen--portrait` interacting badly with stretch-y's
+automatic axis-swap regardless of layout direction, not specific to a
+row/col ambiguity. Applied the same confirmed-working fix pattern
+(explicit `portrait:stretch-x` instead of relying on the automatic
+swap) to `half_vertical.liquid.txt` on that basis, pattern-matching
+from a proven fix rather than a fully understood mechanism. A bare
+diagnostic file (`aurora_watch_porttest.liquid.txt`, unconditional
+layout--col, no portrait: override at all) was created to properly
+isolate whether this is stretch-y/portrait specifically or something
+in our own added code, not yet tested. Not yet confirmed fixed for
+Half Vertical specifically.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug
