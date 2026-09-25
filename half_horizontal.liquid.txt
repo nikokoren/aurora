@@ -1,24 +1,39 @@
 {% comment %}
   Aurora Watch, Half Horizontal view (800x240 on OG). Wide, short:
-  verdict large on the left, the time window and compass hint compact
-  on the right. No forecast strip and no visual here, neither fits this
-  little height without feeling cramped, that's Full (and Half
-  Vertical, once decided) territory. Location lives in the title bar
-  (bottom right), same as every other view.
+  verdict and, when there's anything to say about timing, the time
+  window and compass hint stacked directly underneath it, all in one
+  growing left block, rather than a fixed-width right column that sat
+  mostly blank on quiet nights and awkwardly held two short lines on
+  busy ones. The reclaimed right side is a compact 3-night forecast
+  strip instead, mirroring Quadrant's proven verdict + 3-night layout,
+  just side by side here instead of stacked, there's the width for it.
+  Only present when there's forecast data at all; the left block grows
+  to fill the full width on its own when there isn't. Location lives in
+  the title bar (bottom right), same as every other view.
   Verdict length varies a lot, same reasoning as Quadrant: fit-to-box
   instead of one fixed font size.
 {% endcomment %}
 {% if aurora.ok %}
 <div class="layout layout--row layout--stretch gap">
-  <div class="flex flex--col flex--center grow">
-    <span class="value value--xlarge fit-text" data-value-fit="true" data-value-fit-max-height="150">{{ aurora.verdict | upcase }}</span>
-  </div>
-  <div class="flex flex--col flex--center text--center gap--small shrink-0 w--72">
+  <div class="flex flex--col flex--center text--center gap grow">
+    <span class="value value--xlarge fit-text" data-value-fit="true" data-value-fit-max-height="110">{{ aurora.verdict | upcase }}</span>
     {% if aurora.level > 0 %}
     <span class="title title--small">{{ aurora.line }}</span>
     <span class="description">{{ aurora.look }}</span>
     {% endif %}
   </div>
+  {% if aurora.forecast and aurora.forecast.size > 0 %}
+  <div class="flex flex--col flex--center shrink-0 w--72">
+    <div class="columns">
+      {% for night in aurora.forecast %}
+      <div class="column text--center">
+        <span class="label">{{ night.label | upcase }}</span>
+        <span class="value value--small fit-text" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 <div class="title_bar">
   <span class="title">Aurora Watch</span>
