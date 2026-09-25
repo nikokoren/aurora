@@ -681,6 +681,32 @@ Not yet confirmed on device that this actually fixes Half Vertical
 specifically; the reasoning is sound but this is the second attempt at
 this exact bug, so treat it as a real fix only once seen working.
 
+**Forecast strip: switched from hand-rolled flex--row to the framework's
+actual Columns component, not a shortcut this time.**
+Confirmed on device: with varying content length across the three nights
+("Getting interesting" vs "Maybe"), a `flex flex--row` of `flex--col`
+children sized each column to its own content, so the long one claimed
+most of the width and the other two got squeezed together. That is
+correct default flex behavior, `flex: 0 1 auto` sizes to content, not to
+an equal share; this was never a bug in Flex, it was the wrong tool for
+this job. Read the actual v3 docs rather than guessing: TRMNL's Grid doc
+says outright, "if you have lots of same-type data and want the system
+to handle column distribution and overflow, use Columns", exactly this
+case, three same-shaped items that should split evenly. Confirmed the
+real class syntax from TRMNL's own quickstart example
+(`docs.trmnl.com`): `class="columns"` on the container, `class="column"`
+on each child, not `grid--cols-N` (that is Grid's own syntax, a
+different component with a different purpose, fixed spans, not
+even distribution). Applied to all three views with this strip (Full,
+Half Vertical, Quadrant). Kept `.fit-text`/`shrinkToFit` on the verdict
+span inside each column too, defense in depth: Columns' own overflow/
+clamp pass is JS-driven per the Framework Runtime docs, and
+`data-value-fit` already proved unreliable in this exact production
+pipeline, so the width distribution itself (which columns handles via
+plain CSS flex-basis, no JS required) is what actually fixes the
+squeeze; text-length overflow within an already-equal column is still
+our own homegrown code's job. Not yet confirmed on device.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

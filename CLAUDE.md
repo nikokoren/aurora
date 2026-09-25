@@ -29,7 +29,15 @@ Don't assume a change is correct just because it looks right.
   CSS for anything the framework already has a component or utility
   for. Check `https://trmnl.com/framework/docs/3.3` before assuming a
   class name; the framework has moved fast (v2 to v3.3 in one year) and
-  training data is likely stale.
+  training data is likely stale. This includes not defaulting to a
+  generic `flex flex--row` when there is a more specific component for
+  the job: for a row of same-shaped repeated items that should split
+  evenly (a 3-night forecast strip, anything list-like), that is the
+  Columns component (`class="columns"` / `class="column"`), not Flex,
+  Flex sizes each child to its own content by default, which looks fine
+  until two items have very different content lengths and one crowds
+  out the other. Reach for Grid instead only when spans need to be
+  unequal on purpose (`col--span-N`).
 
 ## Adding or editing user-facing text
 
