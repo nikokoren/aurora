@@ -913,6 +913,37 @@ three views; worth doing if this holds up, but given the pattern above
 to let Niko confirm this is genuinely better before changing three more
 files to match it, rather than assuming.
 
+**Full content rewrite: new hero/short/timing/look strings for both
+languages and both voices, addressing the time-scope issue caught two
+turns ago.**
+Replaced all voice content wholesale rather than tweaking individual
+phrases, sourced from a complete written brief (both languages, both
+voices, all four verdict tiers). One real structural change alongside
+the content: `bestChance`/`darkNow`/`darkFrom`/`tooBright` used to live
+under the shared `ui` block, identical wording regardless of voice; the
+new content needs a distinct phrasing per voice for all four timing
+states, so they moved into a new `timing` sub-object inside each voice
+(`voice.timing.window(from,to)`, `.darkNow`, `.darkLater(t)`,
+`.neverDark`), and the `line` computation in `build()` now reads from
+`voice.timing.*` instead of `L.ui.*`. `ui.now` stays where it was, a
+shared utility word substituted into the "window" case when it starts
+within 10 minutes, used by both voices' own window phrasing.
+Hero/short content stored in normal case rather than the literal ALL
+CAPS it was supplied in, the templates already force uppercase on
+display and the rest of the codebase's content is stored in normal
+case; asked about this choice rather than silently deviating, not yet
+confirmed either way.
+English's day labels (`tonight`/`tomorrow`) and error title were
+already identical to the new content, left untouched; German's day
+labels dropped "Nacht" (Heute Nacht/Morgen Nacht -> Heute/Morgen) and
+the error message dropped the word "Rendering" that was flagged as a
+touch too technical during an earlier German-language review round.
+Tested every language x voice x verdict-tier combination end to end
+(16 combinations): every string resolves to a real, non-empty value,
+the German `{dir}` substitution reads grammatically correctly in every
+phrasing it appears in, and the new voice-specific timing/look content
+threads through the same code path the old ui-based version used.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

@@ -40,7 +40,8 @@ const FORECAST_LEVELS = [
 // language is adding one more key to LOCALES with the same shape, nothing
 // else in the file needs to change. Each language carries two independent
 // things: "voices" (facts vs astrophysicist framing of the same numbers)
-// and "ui" (labels, connective words, the dark/error fallback screen).
+// and "ui" (labels, connective words, the error fallback screen; the
+// timing-line phrasing itself now lives per voice, see "timing" below).
 // Phrase pools have more than one entry per rank so a plugin that polls
 // repeatedly doesn't freeze on one line; pick() below chooses one at
 // random each build.
@@ -48,36 +49,44 @@ const LOCALES = {
   en: {
     voices: {
       facts: {
-        hero: [["Unlikely"], ["Possible"], ["Good chance"], ["Excellent chance"]],
-        short: ["Unlikely", "Possible", "Good", "Excellent"],
-        lookOverhead: ["Look overhead"],
-        lookToward: ["Look {dir}"],
+        hero: [["Minimal chance"], ["Low chance"], ["Good chance"], ["Excellent chance"]],
+        short: ["Minimal", "Low", "Good", "Great"],
+        timing: {
+          window: (from, to) => "Best time: " + from + " to " + to,
+          darkNow: "Best time: now",
+          darkLater: (t) => "Best time: from " + t,
+          neverDark: "Best time: none, too bright",
+        },
+        lookOverhead: ["Direction: straight up"],
+        lookToward: ["Direction: {dir}"],
       },
       astrophysicist: {
         hero: [
-          ["Quiet tonight", "The magnetosphere is quiet", "Not much happening up there"],
-          ["A small chance, but interesting", "Slim chance, but possible", "Things are starting to move"],
-          ["Now we're getting somewhere", "Things are getting interesting", "The auroral oval is moving your way"],
-          ["Oh. This could be good", "Now this is an aurora night", "Stop reading. Look outside"],
+          ["Quiet up there", "Space weather is calm", "Nothing brewing"],
+          ["A faint maybe", "Something's stirring", "Keep an eye out"],
+          ["Now we're talking", "This looks promising", "Grab your jacket"],
+          ["Red alert!", "This is big!", "Don't miss this!"],
         ],
-        short: ["Quiet", "Maybe", "Getting interesting", "WOW!"],
-        lookOverhead: ["Look up. It's overhead!", "Right above you!", "Straight up. Go look!"],
-        lookToward: ["Eyes to the {dir}!", "Look {dir}. Watch the horizon", "Face {dir} and watch the sky"],
+        short: ["Quiet", "Maybe", "Nice", "Wow!"],
+        timing: {
+          window: (from, to) => "Your best shot is " + from + " to " + to,
+          darkNow: "Your best shot is now, it's already dark",
+          darkLater: (t) => "Your best shot starts at " + t + ", once it's dark",
+          neverDark: "Sadly the sun won't sink low enough to get dark",
+        },
+        lookOverhead: ["Forget the compass, just look straight up", "Tip your head back, this one's overhead", "Just look up, the oval sits right above you"],
+        lookToward: ["Face {dir} and scan low over the horizon", "Keep your eyes on the sky to the {dir}", "Turn {dir}, away from any city glow"],
       },
     },
     ui: {
-      bestChance: (from, to) => "Best chance " + from + " to " + to,
       now: "now",
-      darkNow: "Dark now",
-      darkFrom: (t) => "Dark from " + t,
-      tooBright: "Sky too bright tonight",
       tonight: "Tonight",
       tomorrow: "Tomorrow",
       kpLabel: "Kp",
       modelLabel: "model",
       oldData: "old data",
       unavailableTitle: "Aurora data unavailable",
-      unavailableSub: "NOAA did not answer. This screen retries on the next refresh.",
+      unavailableSub: "The space weather service didn't respond. Trying again on the next refresh.",
       dirNorth: "north",
       dirSouth: "south",
       compassN: "N", compassS: "S", compassE: "E", compassW: "W",
@@ -87,36 +96,44 @@ const LOCALES = {
   de: {
     voices: {
       facts: {
-        hero: [["Unwahrscheinlich"], ["Möglich"], ["Gute Chance"], ["Sehr gute Chance"]],
-        short: ["Unwahrscheinlich", "Möglich", "Gut", "Sehr gut"],
-        lookOverhead: ["Schau nach oben"],
-        lookToward: ["Schau in Richtung {dir}"],
+        hero: [["Minimale Chance"], ["Geringe Chance"], ["Gute Chance"], ["Sehr gute Chance"]],
+        short: ["Minimal", "Gering", "Gut", "Top"],
+        timing: {
+          window: (from, to) => "Beste Zeit: " + from + " bis " + to,
+          darkNow: "Beste Zeit: jetzt",
+          darkLater: (t) => "Beste Zeit: ab " + t,
+          neverDark: "Beste Zeit: keine, zu hell",
+        },
+        lookOverhead: ["Richtung: nach oben"],
+        lookToward: ["Richtung: {dir}"],
       },
       astrophysicist: {
         hero: [
-          ["Heute ist es ruhig", "Die Magnetosphäre ist ruhig", "Da oben ist wenig los"],
-          ["Vielleicht tut sich was", "Könnte was werden", "Eine kleine Chance gibt's"],
-          ["Jetzt wird's spannend", "Da tut sich was", "Das sieht gut aus"],
-          ["Oh. Jetzt wird's interessant", "Das könnte richtig gut werden", "Hör auf zu lesen. Schau nach draußen"],
-          ],
-       short: ["Ruhig", "Vielleicht", "Spannend", "WOW!"],
-       lookOverhead: ["Schau nach oben", "Direkt über dir", "Schau hoch. Jetzt"],
-      lookToward: ["Schau nach {dir}", "Richtung {dir}. Blick zum Horizont", "Schau nach {dir}. Der Horizont könnte was zeigen"],
+          ["Ruhig da oben", "Gerade nichts los", "Die Sonne döst"],
+          ["Ein leises Vielleicht", "Da regt sich was", "Augen offen halten"],
+          ["Jetzt wird's spannend", "Das sieht gut aus", "Schnapp dir die Jacke"],
+          ["Alarmstufe rot!", "Das ist riesig!", "Verpass das nicht!"],
+        ],
+        short: ["Ruhig", "Möglich", "Stark", "Wow!"],
+        timing: {
+          window: (from, to) => "Am besten zwischen " + from + " und " + to,
+          darkNow: "Am besten jetzt, es ist schon dunkel",
+          darkLater: (t) => "Am besten ab " + t + ", dann ist es dunkel",
+          neverDark: "Leider sinkt die Sonne nicht tief genug",
         },
-        },
+        lookOverhead: ["Vergiss den Kompass, schau einfach nach oben", "Kopf in den Nacken, direkt über dir", "Schau nach oben, das Oval liegt direkt über dir"],
+        lookToward: ["Schau Richtung {dir}, tief am Horizont", "Behalte den Himmel im {dir} im Blick", "Dreh dich nach {dir}, weg vom Stadtlicht"],
+      },
+    },
     ui: {
-      bestChance: (from, to) => "Beste Chance " + from + " bis " + to,
       now: "jetzt",
-      darkNow: "Jetzt dunkel",
-      darkFrom: (t) => "Dunkel ab " + t,
-      tooBright: "Himmel heute zu hell",
-      tonight: "Heute Nacht",
-      tomorrow: "Morgen Nacht",
+      tonight: "Heute",
+      tomorrow: "Morgen",
       kpLabel: "Kp",
       modelLabel: "Modell",
       oldData: "veraltete Daten",
-      unavailableTitle: "Auroradaten nicht verfügbar",
-      unavailableSub: "NOAA hat nicht geantwortet. Wir versuchen es beim nächsten Rendering erneut.",
+      unavailableTitle: "Polarlichtdaten nicht verfügbar",
+      unavailableSub: "Der Datendienst hat nicht geantwortet. Neuer Versuch beim nächsten Aktualisieren.",
       dirNorth: "Norden",
       dirSouth: "Süden",
       compassN: "N", compassS: "S", compassE: "O", compassW: "W",
@@ -242,10 +259,10 @@ async function build(input) {
   let line;
   if (win && level.rank > 0) {
     const from = win.s - now < 10 * 60000 ? L.ui.now : fmt(r15(win.s));
-    line = L.ui.bestChance(from, fmt(r15(win.e)));
-  } else if (darkNow) line = L.ui.darkNow;
-  else if (darkStart) line = L.ui.darkFrom(fmt(r15(darkStart)));
-  else line = L.ui.tooBright;
+    line = voice.timing.window(from, fmt(r15(win.e)));
+  } else if (darkNow) line = voice.timing.darkNow;
+  else if (darkStart) line = voice.timing.darkLater(fmt(r15(darkStart)));
+  else line = voice.timing.neverDark;
 
   let look = "";
   if (level.rank > 0) {
