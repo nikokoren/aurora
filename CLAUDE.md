@@ -77,15 +77,18 @@ Don't assume a change is correct just because it looks right.
   with a stale size and silently reintroduce the bug `idle` fixed. A
   flat timeout backing up `idle` (not replacing it) is the right way to
   add a safety net without that risk.
-- **`full.liquid.txt` and `half_vertical.liquid.txt` share both
-  `<script>` blocks byte-identically** (block 0: `shrinkToFit`; block 1:
-  the map/polar chart code). They briefly diverged while Half Vertical's
-  blank-map bug was being chased; the cause turned out to be the
-  canvas's stretch class (see above), not the script, and they were
-  re-synced. To propagate a change: extract by block index (there are
-  two, a first-match regex silently grabs the wrong one, which has
-  already shipped a no-op "fix" once) and verify by re-reading the file
-  from disk. Never copy the whole file, the markup differs.
+- **Script layout is the same in every view.** The `shrinkToFit` script
+  is identical in all four files and sits after the final
+  `{% endif %}`, so it also fits the error message. The map/polar chart
+  script exists only in `full.liquid.txt` and `half_vertical.liquid.txt`,
+  sits inside the `aurora.ok` branch (it has nothing to draw otherwise,
+  and threw on the error path when it lived outside), and is
+  byte-identical between those two. To propagate a change: find the
+  block by its content (`var A = {{ aurora | json }}` for the map
+  script, `function shrinkToFit` for the other), not by position,
+  a first-match or fixed-index lookup has already shipped a no-op
+  "fix" once. Verify by re-reading the file from disk. Never copy a
+  whole file, the markup differs.
 - **Handle a slow or failed MapLibre load visibly, don't poll forever.**
   MapLibre is a large blocking script; a renderer that captures before
   it loads, or before the map settles, needs something other than a
@@ -158,13 +161,24 @@ even if it's only needed in one language today.
   reliably execute in TRMNL's actual render pipeline**, confirmed on
   device: a value overflowed its container despite the attribute being
   set correctly, on a fresh render, with no explanation found. Every
-  verdict-like span in every view now has its own `.fit-text` class and
-  is shrunk by a homegrown `shrinkToFit()` function in each file's own
-  script instead, code we know executes reliably here. `data-value-fit`
-  attributes are left in place too, harmless, in case the framework
-  runtime does fire in some contexts, but do not rely on it alone for
-  new text that might overflow, add `.fit-text` and let the local
-  script handle it.
+  element carrying `data-value-fit` is also shrunk by a homegrown
+  `shrinkToFit()` in each view, code we know executes here. It selects
+  on the framework's own `[data-value-fit]` attribute, not a class of
+  ours, so the markup stays free of custom classes. For new text that
+  might overflow: just add `data-value-fit="true"`, the local script
+  picks it up automatically.
+- **No custom classes, and inline styles only where no framework class
+  can do the job.** Every class in the markup and in JS-built HTML is a
+  framework class (positioning uses `relative`, `absolute`,
+  `inset--0`, `top--0`, `left--0`). Exactly three inline styles remain,
+  each commented in place: `overflow:hidden` on the canvas (the
+  framework has no overflow utility, and it contains the polar chart's
+  fixed-size fallback); `position:absolute;inset:0` on `#aurora-map`
+  (MapLibre adds `.maplibregl-map` to that element and its own
+  stylesheet sets `position:relative` there, loaded after the
+  framework's, so the framework class would lose and collapse the map;
+  checked against MapLibre 5.24.0's source CSS); and the font size
+  `shrinkToFit` writes at render time. Don't "clean up" those three.
 - **Never mutate the MapLibre style object `TRMNLMaps.options()`
   returns.** Chased a missing-borders/missing-water bug through five
   variants of rewriting `style.layers` before proving, with isolated

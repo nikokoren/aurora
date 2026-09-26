@@ -975,6 +975,44 @@ this narrow column (`lg:value--large` headline, `value--xsmall`
 per-night word) rather than normalizing them to the other views'.
 Not yet confirmed on device.
 
+**Cleanup pass: localized error state in all four views, no custom
+classes left, inline styles cut to the three that are genuinely needed.**
+Error state: Half Horizontal, Half Vertical and Quadrant showed a
+hardcoded English "No data"; all four now show the localized
+`aurora.title` and `aurora.sub` from the serverless error payload, title
+fitted like the other values.
+Custom classes: `fit-text` (ours, not the framework's) is gone.
+`shrinkToFit` now selects `[data-value-fit]`, the framework attribute
+those spans already carry, so the fallback targets exactly what asked
+the framework to fit.
+Inline styles: canvas `position:relative` became the framework's
+`relative`; the polar SVG's `position:absolute;top:0;left:0` became
+`absolute top--0 left--0`; the map overlay's
+`position:absolute;inset:0;pointer-events:none` became `absolute
+inset--0` (pointer-events dropped, nothing is clickable on e-ink). Kept
+inline, each commented in place: `overflow:hidden` on the canvas (no
+framework overflow utility, and it contains drawPolar's fixed-size
+fallback); `position:absolute;inset:0` on `#aurora-map`, because
+MapLibre's own stylesheet sets `position:relative` on `.maplibregl-map`
+and loads after the framework CSS, so the framework class would lose and
+collapse the map (verified against MapLibre 5.24.0's source CSS, not
+assumed); and the per-render font size `shrinkToFit` writes.
+Script placement standardized: `shrinkToFit` after the final
+`{% endif %}` in all four views (identical everywhere) so the error text
+is fitted too; the map script inside the `aurora.ok` branch in Full and
+Half Vertical. Previously Full had both scripts inside the branch and
+Half Vertical both outside, where the map script threw on the error path
+with no data. Also rewrote Full's header comment, which still described
+the disproven "stretch classes auto-swap" theory.
+Deleted the four scratch diagnostic views (maptest 1 to 3, porttest).
+CLAUDE.md and TEXT_REQUIREMENTS.md corrected to match; older entries in
+this log that mention `.fit-text` are left as history.
+Verified: every class token is a framework class, Liquid/HTML balanced
+in all four views, all scripts syntax-check, the shrink script is
+byte-identical across all four and the map script between Full and Half
+Vertical, all confirmed by re-reading from disk. Not yet confirmed on
+device.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

@@ -118,13 +118,14 @@ per voice.
 
 **Length constraints:** this is the tightest-scrutinized slot in the
 plugin. On the largest screen size it has generous room (comfortably
-two lines of large text). On two of the four screen sizes it has an
-automatic shrink-to-fit safety net if it runs long. On the narrow
-tall screen size, it currently has no such safety net at all, whatever
-is written has to fit on its own at a moderate-to-large font size
-without any code-level rescue if it's too long. Treat that size as the
-binding constraint for this slot: if it fits comfortably there, it will
-fit everywhere.
+two lines of large text). Every screen size has an automatic
+shrink-to-fit safety net if a line runs too wide, but shrinking is a
+rescue, not a goal: a headline that only fits after being shrunk reads
+noticeably smaller than its siblings. The narrow tall screen size
+already uses a deliberately smaller headline font than the others, and
+the smallest screen size has the least room overall; treat those two as
+the binding constraint for this slot: if it fits comfortably there
+without shrinking, it will fit everywhere.
 
 **Tone/escalation:** for the astrophysicist voice specifically, the
 four tiers should read as a genuine escalation, calm/muted at the low
@@ -290,14 +291,10 @@ couldn't be fetched at all. The title states that aurora data is
 unavailable; the explanatory line says the outside data source didn't
 respond and that the screen will try again on its next refresh.
 
-**Current inconsistency worth knowing about:** this localized message
-is only actually shown on the largest screen size. The other three
-screen sizes currently display a plain, hardcoded "no data" placeholder
-that is not localized and doesn't use this text at all. That's a gap in
-the implementation, not a reflection of these strings being
-unimportant, worth knowing about if these ever get revisited, since
-right now writing a beautiful version of this message only pays off in
-one of the four places it could appear.
+**Where it appears:** all four screen sizes show this message. On the
+smaller sizes the title is set in a moderate font and shrinks to fit if
+needed, so a short title still reads best; the explanatory line wraps
+freely.
 
 **Voice:** shared across both voices, this message doesn't change based
 on facts vs astrophysicist.

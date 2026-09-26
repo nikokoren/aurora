@@ -12,25 +12,15 @@
   info column below): mashup/screen dimensions are derived from the
   screen's own width/height, which swap under screen--portrait, so this
   is genuinely a different shape in portrait, not just a smaller
-  version of the same one. The canvas uses stretch-y plus an explicit
-  portrait:stretch-x (not plain "stretch", which is not axis-aware),
-  the framework's axis-correct utility. The auto-swap ("stretch-y means
-  vertical in layout--row, horizontal once layout--col takes over") was
-  tried alone first and produced a blank map area in portrait,
-  confirmed on device: space was still correctly reserved (grow's
-  height allocation worked), the map itself just never rendered
-  visibly, consistent with the canvas collapsing to near-zero width.
-  Suspect the axis-correction keys off the literal layout--col class on
-  the ancestor, and since our markup keeps layout--row present at all
-  times (portrait:layout--col is a separate responsive class added
-  alongside it, not a replacement), it may never recognize the
-  computed direction has actually flipped. Not confirmed against the
-  framework's internals, just the most plausible read of the symptom.
-  Not depending on the automatic detection handling that combination:
-  explicit portrait:stretch-x states outright what should happen in
-  portrait rather than inferring it. Still brings its own
-  min-width:0/min-height:0 protection so the manual inline versions of
-  those stay removed.
+  version of the same one.
+  Canvas: stretch-y portrait:stretch-x. stretch-x and stretch-y are
+  literal axes, x horizontal, y vertical, they do not swap with layout
+  direction. The canvas's only content is absolutely positioned, so it
+  has no intrinsic size: it gets its main-axis size from grow and its
+  cross-axis size only from the stretch class. In landscape (row) the
+  cross axis is vertical, stretch-y; in portrait (col) it is
+  horizontal, portrait:stretch-x. Missing the right one collapses the
+  canvas to zero on that axis: space reserved, map invisible, no error.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <link rel="preconnect" href="https://trmnl.com" crossorigin>
@@ -39,13 +29,25 @@
 {% endif %}
 {% if aurora.ok %}
 <div class="layout layout--row portrait:layout--col layout--stretch gap">
-  <div id="aurora-canvas" class="grow stretch-y portrait:stretch-x" style="position:relative;overflow:hidden">
+    {% comment %}
+    relative is the framework class. overflow:hidden stays inline, the
+    framework has no overflow utility, and it has a real job: if the
+    canvas can never be measured, drawPolar falls back to a fixed size
+    that can be larger than the canvas, and this keeps that contained.
+    The map element's inline position:absolute;inset:0 must also stay
+    inline: MapLibre adds .maplibregl-map to it, and MapLibre's own
+    stylesheet sets position:relative there (checked against the 5.24.0
+    source). That stylesheet loads after the framework's, so at equal
+    specificity the framework's absolute/inset--0 classes would lose and
+    the map would collapse to zero height. Only an inline style wins.
+  {% endcomment %}
+  <div id="aurora-canvas" class="grow stretch-y portrait:stretch-x relative" style="overflow:hidden">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}
   </div>
   <div class="flex flex--col flex--center text--center gap shrink-0 w--72 portrait:w--full">
-    <span class="value value--xlarge fit-text" data-value-fit="true" data-value-fit-max-height="200">{{ aurora.verdict | upcase }}</span>
+    <span class="value value--xlarge" data-value-fit="true" data-value-fit-max-height="200">{{ aurora.verdict | upcase }}</span>
     {% if aurora.level > 0 %}
     <span class="title title--small">{{ aurora.line }}</span>
     <span class="description">{{ aurora.look }}</span>
@@ -56,7 +58,7 @@
       {% for night in aurora.forecast %}
       <div class="column text--center">
         <span class="label">{{ night.label | upcase }}</span>
-        <span class="value value--small fit-text" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+        <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
         <span class="description">Kp {{ night.kp }}</span>
       </div>
       {% endfor %}
@@ -68,32 +70,6 @@
   <span class="title">Aurora Watch</span>
   <span class="instance">{{ aurora.name | upcase }}</span>
 </div>
-<script type="text/javascript">
-(function () {
-  // The framework's own Fit Value runtime (data-value-fit) doesn't
-  // appear to execute in TRMNL's actual render pipeline, confirmed on
-  // device: a forecast verdict word visibly overflowed its column on a
-  // fresh render even with the attribute set. Rather than depend on
-  // framework JS we can't verify runs, shrink these ourselves with a
-  // small function in our own script, which does reliably execute here
-  // (the map, TRMNLPaint colors, all of it). data-value-fit is left in
-  // place too, harmless, in case it ever does fire.
-  function shrinkToFit(el, minPx) {
-    if (!el) return;
-    var container = el.parentElement;
-    if (!container) return;
-    var guard = 0;
-    while (el.scrollWidth > container.clientWidth + 1 && guard < 60) {
-      var size = parseFloat(window.getComputedStyle(el).fontSize);
-      if (!size || size <= minPx) break;
-      el.style.fontSize = (size - 1) + "px";
-      guard++;
-    }
-  }
-  var els = document.querySelectorAll(".fit-text");
-  for (var i = 0; i < els.length; i++) shrinkToFit(els[i], 14);
-})();
-</script>
 <script type="text/javascript">
 (function () {
   var A = {{ aurora | json }};
@@ -173,7 +149,7 @@
       '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(6) + '" fill="' + C + '"/>';
     el.innerHTML =
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '"' +
-      ' shape-rendering="crispEdges" style="position:absolute;top:0;left:0">' +
+      ' shape-rendering="crispEdges" class="absolute top--0 left--0">' +
       ring + cells + rim + you + '</svg>';
   }
 
@@ -257,7 +233,7 @@
       }
     }
     var svg = document.createElement("div");
-    svg.style.cssText = "position:absolute;inset:0;pointer-events:none";
+    svg.className = "absolute inset--0";
     svg.innerHTML =
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
       out.join("") + '</svg>';
@@ -362,11 +338,39 @@
 })();
 </script>
 {% else %}
-<div class="layout layout--col layout--center gap">
-  <span class="value value--large">{{ aurora.title }}</span>
+<div class="layout layout--col layout--center text--center gap">
+  <span class="value value--large" data-value-fit="true">{{ aurora.title }}</span>
   <span class="description">{{ aurora.sub }}</span>
 </div>
 <div class="title_bar">
   <span class="title">Aurora Watch</span>
 </div>
 {% endif %}
+<script type="text/javascript">
+(function () {
+  // Shrinks every element carrying the framework's data-value-fit
+  // attribute until it fits its parent's width. The framework's own Fit
+  // Value runtime is meant to do this but did not reliably fire in
+  // TRMNL's render pipeline (a forecast word visibly overflowed on a
+  // fresh render with the attribute set), so this does the same job
+  // with code we know runs. It keys off the framework's attribute rather
+  // than a class of our own, so the markup carries no custom classes.
+  // If the runtime does fire as well, both only ever shrink, so they
+  // cannot fight. Sits outside the aurora.ok branch so the error
+  // message is fitted too.
+  function shrinkToFit(el, minPx) {
+    if (!el) return;
+    var container = el.parentElement;
+    if (!container) return;
+    var guard = 0;
+    while (el.scrollWidth > container.clientWidth + 1 && guard < 60) {
+      var size = parseFloat(window.getComputedStyle(el).fontSize);
+      if (!size || size <= minPx) break;
+      el.style.fontSize = (size - 1) + "px";
+      guard++;
+    }
+  }
+  var els = document.querySelectorAll("[data-value-fit]");
+  for (var i = 0; i < els.length; i++) shrinkToFit(els[i], 14);
+})();
+</script>

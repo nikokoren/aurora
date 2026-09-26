@@ -12,14 +12,14 @@
 {% endcomment %}
 {% if aurora.ok %}
 <div class="layout layout--col layout--center text--center gap">
-  <span class="value value--large fit-text" data-value-fit="true" data-value-fit-max-height="70">{{ aurora.verdict | upcase }}</span>
+  <span class="value value--large" data-value-fit="true" data-value-fit-max-height="70">{{ aurora.verdict | upcase }}</span>
   {% if aurora.forecast and aurora.forecast.size > 0 %}
   <div class="divider"></div>
   <div class="columns">
     {% for night in aurora.forecast %}
     <div class="column text--center">
       <span class="label">{{ night.label | upcase }}</span>
-      <span class="value value--small fit-text" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+      <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
     </div>
     {% endfor %}
   </div>
@@ -29,13 +29,27 @@
   <span class="title">Aurora Watch</span>
   <span class="instance">{{ aurora.name | upcase }}</span>
 </div>
+{% else %}
+<div class="layout layout--col layout--center text--center gap">
+  <span class="value value--base" data-value-fit="true">{{ aurora.title }}</span>
+  <span class="description">{{ aurora.sub }}</span>
+</div>
+<div class="title_bar">
+  <span class="title">Aurora Watch</span>
+</div>
+{% endif %}
 <script type="text/javascript">
 (function () {
-  // Same reasoning as full.liquid.txt: the framework's own Fit Value
-  // runtime doesn't appear to execute in TRMNL's actual render
-  // pipeline, confirmed on device, so this view shrinks its own verdict
-  // text rather than depending on it. data-value-fit left in place too,
-  // harmless, in case it ever does fire.
+  // Shrinks every element carrying the framework's data-value-fit
+  // attribute until it fits its parent's width. The framework's own Fit
+  // Value runtime is meant to do this but did not reliably fire in
+  // TRMNL's render pipeline (a forecast word visibly overflowed on a
+  // fresh render with the attribute set), so this does the same job
+  // with code we know runs. It keys off the framework's attribute rather
+  // than a class of our own, so the markup carries no custom classes.
+  // If the runtime does fire as well, both only ever shrink, so they
+  // cannot fight. Sits outside the aurora.ok branch so the error
+  // message is fitted too.
   function shrinkToFit(el, minPx) {
     if (!el) return;
     var container = el.parentElement;
@@ -48,15 +62,7 @@
       guard++;
     }
   }
-  var els = document.querySelectorAll(".fit-text");
+  var els = document.querySelectorAll("[data-value-fit]");
   for (var i = 0; i < els.length; i++) shrinkToFit(els[i], 14);
 })();
 </script>
-{% else %}
-<div class="layout layout--col layout--center text--center gap">
-  <span class="value value--base">No data</span>
-</div>
-<div class="title_bar">
-  <span class="title">Aurora Watch</span>
-</div>
-{% endif %}
