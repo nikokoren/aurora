@@ -48,13 +48,22 @@ Don't assume a change is correct just because it looks right.
   and taller needs its own `portrait:layout--col` (or equivalent)
   reflow, the same pattern `full.liquid.txt` and
   `half_horizontal.liquid.txt` already use, not just Full.
-- **Use `stretch-x`/`stretch-y`, never plain `stretch`,** on anything
-  meant to fill the cross axis of a Layout that might reflow between
-  row and column. They are axis-correct: `stretch-y` means vertical
-  stretch in `layout--row` and automatically means horizontal stretch
-  once `portrait:layout--col` takes over, no separate portrait-specific
-  class needed. They also include `min-width:0`/`min-height:0`
-  protection built in, so do not add that manually alongside them.
+- **`stretch-x` and `stretch-y` are literal axes, x horizontal, y
+  vertical. They do NOT swap with layout direction.** An earlier version
+  of this rule claimed they did, based on a misreading of the X Guide;
+  device testing disproved it. Pick the one matching the parent's cross
+  axis: `stretch-y` in `layout--row`, `stretch-x` in `layout--col`, and
+  for a layout that reflows (`layout--row portrait:layout--col`) state
+  both, `stretch-y portrait:stretch-x`. This matters most for an element
+  with no intrinsic size of its own, like the map canvas (its only
+  content is absolutely positioned): it gets its main-axis size from
+  `grow` and its cross-axis size only from the stretch class. The wrong
+  one gives it the main axis twice and the cross axis never, collapsing
+  it to zero: space reserved, content invisible, no error anywhere.
+  That exact symptom hit Half Vertical twice (`stretch-y` in a column).
+  Prefer these over plain `stretch`; they include
+  `min-width:0`/`min-height:0`, so don't add those inline alongside.
+
 - **A MapLibre map's `load` event is not reliable for anything that
   measures the container** (recenter math, anything reading
   `clientWidth`/`clientHeight`). `idle` is: it fires once rendering has
@@ -68,35 +77,23 @@ Don't assume a change is correct just because it looks right.
   with a stale size and silently reintroduce the bug `idle` fixed. A
   flat timeout backing up `idle` (not replacing it) is the right way to
   add a safety net without that risk.
-- **`full.liquid.txt` and `half_vertical.liquid.txt`'s map scripts are
-  no longer byte-identical, and that is deliberate, not an oversight to
-  fix.** They were kept identical for a long stretch of this project,
-  worth re-checking that discipline before assuming it, but every
-  robustness layer added on top of the working idle-based fix (plain
-  `stretch` -> `stretch-y` -> `stretch-y portrait:stretch-x`, then
-  explicit missing-library detection, a fallback message, a watchdog,
-  forced `map.resize()` calls) was confirmed to break Half Vertical's
-  map on device, "your half vertical code actually broke the map."
-  Half Vertical was reverted to the simpler version from right after
-  the idle fix: plain `stretch`, manual inline
-  `min-width:0`/`min-height:0`, `idle` with no timeout/watchdog/forced
-  resize. Full still has all of that layered on, `portrait:stretch-x`
-  was confirmed fixing Full's own blank-portrait-map bug, but that
-  confirmation predates the robust-loading rewrite being added on top,
-  it has not been separately reverified since. Before adding anything
-  else to either file's map handling: confirm it actually helps on
-  device first, several changes in a row here looked like reasonable
-  improvements and were regressions instead. If in doubt, the simpler
-  Half Vertical version is the one currently known to work.
-- Handle a slow or failed MapLibre load visibly, don't just poll
-  forever, when doing so doesn't risk the regression above. MapLibre is
-  a large blocking script; a renderer that captures before it loads, or
-  before the map ever settles, needs something other than a blank
-  canvas. `full.liquid.txt` currently does this (detects which library
-  never showed up and shows a message naming it, plus an outer watchdog
-  for `TRMNLMaps.watch` never calling back), borrowed from the Nearby
-  Nextbike recipe. `half_vertical.liquid.txt` does not, per the point
-  above.
+- **`full.liquid.txt` and `half_vertical.liquid.txt` share both
+  `<script>` blocks byte-identically** (block 0: `shrinkToFit`; block 1:
+  the map/polar chart code). They briefly diverged while Half Vertical's
+  blank-map bug was being chased; the cause turned out to be the
+  canvas's stretch class (see above), not the script, and they were
+  re-synced. To propagate a change: extract by block index (there are
+  two, a first-match regex silently grabs the wrong one, which has
+  already shipped a no-op "fix" once) and verify by re-reading the file
+  from disk. Never copy the whole file, the markup differs.
+- **Handle a slow or failed MapLibre load visibly, don't poll forever.**
+  MapLibre is a large blocking script; a renderer that captures before
+  it loads, or before the map settles, needs something other than a
+  blank canvas. The shared map script detects which library never
+  showed up and says so, and an outer watchdog covers
+  `TRMNLMaps.watch` never calling back. Borrowed from the Nearby
+  Nextbike recipe. Confirmed working on device in Full (landscape and
+  portrait).
 
 ## Adding or editing user-facing text
 

@@ -944,6 +944,37 @@ the German `{dir}` substitution reads grammatically correctly in every
 phrasing it appears in, and the new voice-specific timing/look content
 threads through the same code path the old ui-based version used.
 
+**Half Vertical brought back in line with the other views; the blank-map
+bug's actual mechanism found.**
+Reviewing every device result in order, one explanation fits all of
+them: `stretch-x`/`stretch-y` are literal axes, not auto-swapping. The
+canvas's only content is the absolutely positioned map, so it has no
+intrinsic size; it gets main-axis size from `grow` and cross-axis size
+only from the stretch class. Full landscape (row, `stretch-y`) and Full
+portrait (col, `portrait:stretch-x`) both worked; Half Vertical (always
+col) with `stretch-y` got height twice and width never, collapsing to
+zero width, the "space reserved, nothing inside" symptom seen twice;
+plain `stretch` worked because it stretches both. Half Vertical's canvas
+is now `grow stretch-x`. The previous CLAUDE.md rule claiming the
+classes swap automatically was wrong and has been replaced.
+
+Also corrects an earlier claim in this file: Full's robust loading WAS
+confirmed on device. It landed (c108009) before Full's portrait fix
+(ccbb1d5), and Niko's confirmation came after the latter. The robust
+loading was never the cause of Half Vertical's breakage, so Half
+Vertical's map script has been re-synced to Full's, both script blocks
+byte-identical again.
+
+Other alignment changes: forecast strip children now use
+`class="column text--center"` like the other three views (they were
+plain flex divs inside `.columns`, off the documented pattern, and the
+`fit-text` class on the wrapper div was removed, it belongs only on the
+value span); verdict and per-night spans got `fit-text` and
+`data-value-fit` like the others. Kept Niko's on-device font sizes for
+this narrow column (`lg:value--large` headline, `value--xsmall`
+per-night word) rather than normalizing them to the other views'.
+Not yet confirmed on device.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug
