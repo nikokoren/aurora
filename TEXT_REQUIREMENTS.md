@@ -87,6 +87,26 @@ phrasing for this voice should be judged against that description.
 chance of seeing the aurora." This is the largest, most prominent text
 in the entire plugin, shown at every screen size, always.
 
+**Time scope: this describes right now, a single point-in-time
+reading, not a forecast for the whole day or night.** The underlying
+data behind this slot is a live snapshot of current aurora activity,
+with no look-ahead across the day built into it at all. A phrase that
+frames its whole claim around "today" or "tonight" (as a time span,
+not just a passing mention) overstates what the data actually
+supports, and can visibly contradict itself if the screen happens to
+refresh again later the same day with a different reading, since
+there's no guarantee the two readings agree. This was found by
+inspection to be a real, existing problem, at least one current
+phrasing in each of the two languages does this. A present-moment
+framing ("right now", "currently", or simply no time reference at all)
+doesn't have this problem; anything that frames the claim as spanning
+a whole day or night does, regardless of language. Note this doesn't
+apply to every slot with a day/night word in it: the timing line
+(slot 3)'s "sky too bright" variant legitimately can make a whole-night
+claim, because its underlying check actually looks ahead across a full
+day before concluding there's no darkness at all; this slot has no
+equivalent look-ahead, it's a single snapshot, full stop.
+
 **Display:** always rendered in ALL CAPS regardless of how it's
 written.
 
