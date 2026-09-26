@@ -1,34 +1,340 @@
 {% comment %}
-  Aurora Watch, Quadrant view (400x240 on OG). Only ever shown inside a
-  Mashup next to other plugins, so the title bar earns its place, it is
-  the only thing identifying this tile as Aurora Watch. Location name
-  lives there too (bottom right), not repeated in the body.
-  Verdict length varies a lot ("Unlikely" vs "Slim, but possible" vs
-  "Excellent chance"), so data-value-fit-max-height lets it wrap and
-  shrink to fit instead of guessing one font size that works for all of
-  them. The 3-night strip underneath mirrors Full: full label, written-
-  out verdict, no Kp number, confirmed on device there's room for it at
-  this width.
+  Aurora Watch, Quadrant view (400x240 on OG landscape). Only ever shown
+  inside a Mashup, so the title bar earns its place: it is the only thing
+  identifying this tile, and carries the location name (bottom right).
+  Body: the verdict, then the compact 3-night strip, as one centered
+  text block. Verdict length varies a lot between tiers and languages,
+  so it carries data-value-fit and shrinks to fit rather than relying on
+  one font size.
+  On the TRMNL X the view also shows the aurora visual (polar chart or
+  real map, per the use_real_map setting) as the first item in the row.
+  It is hidden on the OG, where this slot has no room for it; the OG
+  layout is otherwise unchanged. MapLibre is still downloaded on the OG
+  when use_real_map is on (a hidden element doesn't stop a script tag),
+  but the drawing code waits for the canvas to be shown and does nothing
+  if it never is.
 {% endcomment %}
+{% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
+<link rel="preconnect" href="https://trmnl.com" crossorigin>
+<script src="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.js"></script>
+<link href="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.css" rel="stylesheet">
+{% endif %}
 {% if aurora.ok %}
-<div class="layout layout--col layout--center text--center gap">
-  <span class="value value--large" data-value-fit="true" data-value-fit-max-height="70">{{ aurora.verdict | upcase }}</span>
-  {% if aurora.forecast and aurora.forecast.size > 0 %}
-  <div class="divider"></div>
-  <div class="columns">
-    {% for night in aurora.forecast %}
-    <div class="column text--center">
-      <span class="label">{{ night.label | upcase }}</span>
-      <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
-    </div>
-    {% endfor %}
+<div class="layout layout--row portrait:layout--col layout--stretch gap">
+  {% comment %}
+    X-only visual: "hidden lg:block" hides it on the OG and shows it on the
+    TRMNL X, where even this slot has room. Same toggle, same drawing code
+    and same canvas rules as full.liquid.txt (see its comments for why
+    stretch-y portrait:stretch-x, and why the two inline styles stay).
+  {% endcomment %}
+  <div id="aurora-canvas" class="hidden lg:block grow stretch-y portrait:stretch-x relative" style="overflow:hidden">
+    {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
+    <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
+    {% endif %}
   </div>
-  {% endif %}
+  <div class="flex flex--col flex--center text--center gap grow">
+    <span class="value value--large" data-value-fit="true" data-value-fit-max-height="70">{{ aurora.verdict | upcase }}</span>
+    {% if aurora.forecast and aurora.forecast.size > 0 %}
+    <div class="divider"></div>
+    <div class="columns">
+      {% for night in aurora.forecast %}
+      <div class="column text--center">
+        <span class="label">{{ night.label | upcase }}</span>
+        <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
 </div>
 <div class="title_bar">
   <span class="title">Aurora Watch</span>
   <span class="instance">{{ aurora.name | upcase }}</span>
 </div>
+<script type="text/javascript">
+(function () {
+  var A = {{ aurora | json }};
+  var USE_MAP = {{ trmnl.plugin_settings.custom_fields_values.use_real_map | default: false }};
+  var el = document.getElementById("aurora-canvas");
+
+  // ---------- shared helpers ----------
+  function px(n, kind) { return (window.TRMNLPaint) ? TRMNLPaint.px(n, { el: el, kind: kind }) : n; }
+  function colorOf(v, fallback) { if (v && typeof v === "object") v = v.color; return v || fallback; }
+  function ink() { try { return colorOf(TRMNLPaint.textColor("default", { el: el }), "#000"); } catch (e) { return "#000"; } }
+  function paper() { try { return colorOf(TRMNLPaint.semantic("canvas", { el: el }), "#fff"); } catch (e) { return "#fff"; } }
+  // Aurora colors: green is the body of a real aurora (oxygen glow), pink
+  // the rarer high-altitude fringe seen only in strong displays. Both
+  // resolve through TRMNLPaint.bg(), which is why no device branching is
+  // needed here: a color panel gets green/pink, a limited 4-color panel
+  // (BWRY) gets whichever of its 4 inks the framework maps those hues to,
+  // and the plain 1-bit OG falls back to ink() automatically.
+  function auroraGreen() { try { return colorOf(TRMNLPaint.bg("green", { el: el }), ink()); } catch (e) { return ink(); } }
+  function auroraPink() { try { return colorOf(TRMNLPaint.bg("pink", { el: el }), ink()); } catch (e) { return ink(); } }
+  // A mid gray, not full black, for the dot casing: dark enough to
+  // separate from white land, light enough not to swallow small dots.
+  // The framework's own docs call this exact technique out ("intermediate
+  // steps... subtler contrasts... especially on 2-bit and 4-bit
+  // displays") rather than always reaching for the darkest ink available.
+  function ringGray() { try { return colorOf(TRMNLPaint.bg("gray-35", { el: el }), ink()); } catch (e) { return ink(); } }
+
+  // ---------- mode 1: abstract polar chart (SVG) ----------
+  function drawPolar() {
+    // Guard against measuring before layout has actually sized this box:
+    // a stale 0x0 read would otherwise force the old fixed 440x400
+    // fallback below, which can draw larger than the real container and
+    // spill into neighboring content. Retry a few times first; only fall
+    // back to a fixed size if the box still isn't laid out after that.
+    if ((!el.clientWidth || !el.clientHeight) && drawPolar.tries === undefined) drawPolar.tries = 0;
+    if ((!el.clientWidth || !el.clientHeight) && drawPolar.tries < 10) {
+      drawPolar.tries++;
+      setTimeout(drawPolar, 50);
+      return;
+    }
+    var G = A.grid;
+    var W = el.clientWidth || 440, H = el.clientHeight || 400;
+    var C = ink(), P = paper(), GN = auroraGreen(), PK = auroraPink(), RG = ringGray();
+    var R = Math.floor(Math.min(W, H) / 2) - px(4);
+    var cx = Math.round(W / 2), cy = Math.round(H / 2);
+    var sign = G.hemi > 0 ? 1 : -1;
+    var rad = Math.PI / 180;
+    var out = [];
+    var lastRow = Math.ceil(G.max_colat / G.step_lat);
+    var radial = G.step_lat / G.max_colat * R;
+    for (var i = 0; i < lastRow; i++) {
+      var r = (i + 0.5) * G.step_lat / G.max_colat * R;
+      for (var j = 0; j < G.cols; j++) {
+        var d = +G.cells.charAt(i * G.cols + j);
+        if (!d) continue;
+        var th = ((j + 0.5) * G.step_lon - A.user_lon) * rad * sign;
+        var cell = Math.min(radial, r * G.step_lon * rad);
+        var s = Math.max(2, Math.round(cell * (0.25 + 0.75 * d / 9)));
+        var x = Math.round(cx + r * Math.sin(th) - s / 2);
+        var y = Math.round(cy + r * Math.cos(th) - s / 2);
+        // Mostly green (the real color of an aurora's main glow); an
+        // occasional pink pick only at the highest intensity, the rarer
+        // high-altitude fringe a strong display shows. A mid-gray casing
+        // (not black, too heavy for a cell this small) so a light fill
+        // still separates from the plain white canvas behind it, not
+        // just from a colored background.
+        var fillC = (d >= 6 && Math.random() < 0.5) ? PK : GN;
+        out.push('<rect x="' + x + '" y="' + y + '" width="' + s + '" height="' + s + '" fill="' + fillC + '" stroke="' + RG + '" stroke-width="0.75"/>');
+      }
+    }
+    var cells = out.join("");
+    var ru = Math.min(G.user_colat, G.max_colat) / G.max_colat * R;
+    var rim = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + C + '" stroke-width="' + px(2) + '"/>';
+    var ring = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ru + '" fill="none" stroke="' + C + '" stroke-width="1" stroke-dasharray="' + px(2) + ' ' + px(6) + '"/>';
+    var ux = cx, uy = Math.round(cy + ru);
+    var you =
+      '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(12) + '" fill="' + P + '" stroke="' + C + '" stroke-width="' + px(2) + '"/>' +
+      '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(6) + '" fill="' + C + '"/>';
+    el.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '"' +
+      ' shape-rendering="crispEdges" class="absolute top--0 left--0">' +
+      ring + cells + rim + you + '</svg>';
+  }
+
+  // ---------- mode 2: real map (MapLibre, TRMNLMaps) ----------
+  // Borrows two ideas from a sibling recipe (Nearby Nextbike) that has
+  // already been through this exact problem: MapLibre is loaded as a
+  // blocking ~1MB script tag, so a renderer that captures before it
+  // finishes, or before the map settles, used to just leave a blank
+  // box, which reads as a broken device rather than a recipe having a
+  // slow minute. Explicit detection of which library never showed up
+  // (rather than polling forever with nothing to show for it), and a
+  // visible fallback message instead of a blank canvas if nothing ever
+  // draws, both borrowed from there. The event-firing strategy is not
+  // borrowed as directly: that recipe treats load and styledata as
+  // interchangeable triggers for the same setup work, but idle is
+  // specifically what fixed Half Vertical's recenter math not applying
+  // (load fired too early there, before the container's final size had
+  // settled), so idle stays the one real trigger here and only a flat
+  // timeout backs it up, not load/styledata racing against it and
+  // potentially winning with the same stale-size problem idle was
+  // chosen to avoid.
+  function mapFallback(mapEl, message) {
+    mapEl.innerHTML = '<div class="flex flex--col flex--center-x flex--center-y h--full w--full">'
+      + '<span class="description">' + message + '</span></div>';
+  }
+
+  function whenReady(mapEl, cb) {
+    var tries = 0;
+    (function attempt() {
+      var missing = [];
+      if (typeof maplibregl === "undefined") missing.push("maplibregl");
+      if (typeof TRMNLMaps === "undefined") missing.push("TRMNLMaps");
+      if (!missing.length) return cb();
+      if (++tries > 200) { mapFallback(mapEl, "Map unavailable (" + missing.join(", ") + " did not load)"); return; }
+      setTimeout(attempt, 50);
+    })();
+  }
+
+  // Aurora intensity 0 to 9, drawn as a stochastic stipple projected onto
+  // the real map with map.project(): several small, jittered circles per
+  // cell instead of one grid-aligned square, the same trick halftone
+  // printing uses to fake a soft gradient out of flat ink. Denser and
+  // slightly larger dots where intensity is higher; sparse single dots at
+  // the edges so the shape fades out instead of stopping at a hard grid
+  // line. Draws into an SVG overlay laid over the map canvas.
+  function buildAuroraOverlay(map, mapEl) {
+    var G = A.geo_grid;
+    if (!G || !G.cells) return;
+    var W = mapEl.clientWidth, H = mapEl.clientHeight;
+    if (!W || !H) return;
+    var GN = auroraGreen(), PK = auroraPink(), RG = ringGray();
+    var ringW = px(1);
+    var out = [];
+    for (var i = 0; i < G.rows; i++) {
+      var la = G.lat0 + i * G.step_lat;
+      var h = G.step_lat / 2, w = G.step_lon / 2;
+      for (var j = 0; j < G.cols; j++) {
+        var d = +G.cells.charAt(i * G.cols + j);
+        if (!d) continue;
+        var lo = G.lon0 + j * G.step_lon;
+        var p0 = map.project([lo - w, la - h]);
+        var p1 = map.project([lo + w, la + h]);
+        var cx = (p0.x + p1.x) / 2, cy = (p0.y + p1.y) / 2;
+        if (cx < -20 || cx > W + 20 || cy < -20 || cy > H + 20) continue;
+        var cw = Math.abs(p1.x - p0.x), ch = Math.abs(p1.y - p0.y);
+        var rBase = Math.max(0.6, Math.min(cw, ch) * 0.26);
+        var n = Math.max(1, Math.round(d / 2.2));
+        var fillC = (d >= 6 && Math.random() < 0.5) ? PK : GN;
+        for (var k = 0; k < n; k++) {
+          var jx = (Math.random() - 0.5) * cw * 0.75;
+          var jy = (Math.random() - 0.5) * ch * 0.75;
+          var r = rBase * (0.55 + 0.45 * d / 9) * (0.75 + Math.random() * 0.5);
+          // A thin mid-gray casing around each dot, the same contrast-ring
+          // trick TRMNLMaps.dot() uses for its own markers, so the aurora
+          // reads apart from whatever's under it. Gray, not black: full
+          // ink() worked but overpowered a dot this small; a mid-gray
+          // still separates from white land and the gray water/tiles
+          // without the ring dominating the fill inside it.
+          out.push('<circle cx="' + (cx + jx).toFixed(1) + '" cy="' + (cy + jy).toFixed(1) + '" r="' + r.toFixed(1) + '" fill="' + fillC + '" stroke="' + RG + '" stroke-width="' + ringW + '"/>');
+        }
+      }
+    }
+    var svg = document.createElement("div");
+    svg.className = "absolute inset--0";
+    svg.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+      out.join("") + '</svg>';
+    mapEl.appendChild(svg);
+  }
+
+  // Forcing the map to grayscale ourselves (a CSS filter, then rewriting
+  // the MapLibre style's own colors before the map painted, several
+  // variants of that) turned out to be solving a problem that mostly
+  // didn't exist and creating a worse one: confirmed by a bare, fully
+  // untouched preset rendering correctly (gray water, dark borders,
+  // device-appropriate colors) with no intervention at all, while
+  // mutating the style object, regardless of exactly how, broke that
+  // same rendering (water disappearing, borders fading to the thin
+  // default line). TRMNLMaps already resolves colors per device on its
+  // own; the map preset is left alone now rather than rewritten.
+
+  function drawMap() {
+    var mapEl = document.getElementById("aurora-map");
+    if (!mapEl) return;
+    whenReady(mapEl, function () {
+      var watchRan = false;
+      TRMNLMaps.watch("aurora-map", function () {
+        watchRan = true;
+        var map = new maplibregl.Map(TRMNLMaps.options({
+          el: "aurora-map", preset: "outline",
+          center: [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat],
+          zoom: 3,
+        }));
+        var initialized = false;
+        function setup() {
+          if (initialized) return;
+          initialized = true;
+          // Force MapLibre to resync its internal canvas size with
+          // whatever the container's current DOM measurements actually
+          // are, in case that's what was stale, before trusting either
+          // for the recenter math.
+          map.resize();
+          // Bias the view so the user's own spot sits in the outer third
+          // of the screen, not dead center: what matters is the sky
+          // between the viewer and their own pole, not what's behind
+          // them. Bottom third north of the equator (more room above,
+          // toward the north pole), flipped to the top third south of
+          // it. The map is currently centered exactly on the user (that
+          // is what "center" above was), so unproject() the screen point
+          // that should become the new center, at the same zoom, and
+          // recentering there pushes the user's own location to the
+          // target screen position, a pure pixel-space translation.
+          var W = mapEl.clientWidth, H = mapEl.clientHeight;
+          if (W && H) {
+            var frac = A.grid.hemi > 0 ? 0.75 : 0.25;
+            var target = map.unproject([W / 2, H * (1 - frac)]);
+            map.setCenter(target);
+          }
+          buildAuroraOverlay(map, mapEl);
+          TRMNLMaps.dot(map, [A.user_lon > 180 ? A.user_lon - 360 : A.user_lon, A.user_lat], { el: "aurora-map", id: "you" });
+        }
+        // idle fires once the map has fully finished rendering, a
+        // stronger guarantee than load (style+sources ready, but not
+        // necessarily the final container size settled). Worked in
+        // Full on load but did nothing in Half Vertical, confirmed on
+        // device, most likely because Half Vertical's column layout
+        // gives the map its height via "grow" filling whatever space
+        // the text below it leaves, which can settle later than a row
+        // layout's width does. idle can fire more than once (including
+        // from setup's own setCenter/resize triggering a re-render),
+        // hence setup's own initialized guard rather than relying on
+        // this listener firing exactly once.
+        map.on("idle", setup);
+        // idle normally lands well under a second once tiles are
+        // reachable; if it has not fired within 3s, something is off (a
+        // slow or unreachable tile server), draw anyway rather than
+        // leave a bare basemap with no aurora on it indefinitely. Not
+        // load/styledata as an equal alternative trigger racing against
+        // idle: those can fire before the container's final size has
+        // settled, which is the exact problem idle was chosen to avoid,
+        // so this is only a flat timeout, a backstop for idle never
+        // firing at all rather than a second path that could win early
+        // with a stale size.
+        setTimeout(setup, 3000);
+        return map;
+      });
+      // Outer watchdog: if TRMNLMaps.watch's own callback never ran at
+      // all, none of the above ever had a chance to fire either, idle,
+      // the 3s fallback, none of it. Say so rather than leave the area
+      // however the bare framework element rendered before any of this
+      // ran.
+      setTimeout(function () {
+        if (!watchRan) mapFallback(mapEl, "Map did not initialize");
+      }, 6000);
+    });
+  }
+
+  // ---------- entry point ----------
+  // In Half Horizontal and Quadrant the canvas is "hidden lg:block": shown
+  // on the TRMNL X, hidden on the OG. Hiding it does not stop this script
+  // (or the MapLibre download) from running, so wait until the canvas is
+  // actually displayed and draw nothing if it never is. A short wait
+  // rather than a one-shot check, in case the screen size classes are
+  // applied after this script first runs. In Full and Half Vertical the
+  // canvas is always shown and this passes on the first check.
+  function whenShown(cb) {
+    var tries = 0;
+    (function check() {
+      if (el && window.getComputedStyle(el).display !== "none") return cb();
+      if (++tries > 20) return;
+      setTimeout(check, 50);
+    })();
+  }
+  whenShown(function () {
+    if (USE_MAP) {
+      drawMap();
+    } else if (window.TRMNLPaint && TRMNLPaint.watch) {
+      TRMNLPaint.watch(el, drawPolar);
+    } else {
+      drawPolar();
+    }
+  });
+})();
+</script>
 {% else %}
 <div class="layout layout--col layout--center text--center gap">
   <span class="value value--base" data-value-fit="true">{{ aurora.title }}</span>

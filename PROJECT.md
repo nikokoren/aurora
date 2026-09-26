@@ -1013,6 +1013,29 @@ byte-identical across all four and the map script between Full and Half
 Vertical, all confirmed by re-reading from disk. Not yet confirmed on
 device.
 
+**Half Horizontal and Quadrant show the aurora visual on the TRMNL X.**
+The X gives even these slots room (an X Quadrant is about 936x702, bigger
+in both directions than the OG's whole full screen). The canvas is added
+as the first child of each view's row with `hidden lg:block`, following
+the existing `use_real_map` setting (map or polar chart), with the same
+canvas classes and inline styles as Full. On the OG it's hidden and the
+text block takes the full width as before; Half Horizontal's OG markup is
+unchanged, Quadrant's text moved into one wrapper so it can sit beside
+the visual as a block (the same wrapper pattern Half Vertical uses).
+Visibility prefixes follow the device, not the slot, confirmed in the
+Visibility docs. Didn't use `lg:layout--row` for Quadrant because size
+prefixes on layout direction aren't documented; a row that simply loses
+a hidden child on the OG needs no switch at all.
+Hiding is CSS only, so the map script gained `whenShown`: it waits up to
+about a second for the canvas to be displayed and draws nothing if it
+stays hidden. A wait rather than a one-shot check, since it's unverified
+whether the size classes apply before our script runs. Tested with the
+real function: draws immediately when shown, draws after a late reveal,
+never draws when hidden. Known cost: with `use_real_map` on, the OG still
+downloads MapLibre (about 1 MB) for these two views, since a hidden
+element doesn't stop a script tag. The map script is now byte-identical
+across all four views. Not yet confirmed on device.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

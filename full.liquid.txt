@@ -328,13 +328,30 @@
   }
 
   // ---------- entry point ----------
-  if (USE_MAP) {
-    drawMap();
-  } else if (window.TRMNLPaint && TRMNLPaint.watch) {
-    TRMNLPaint.watch(el, drawPolar);
-  } else {
-    drawPolar();
+  // In Half Horizontal and Quadrant the canvas is "hidden lg:block": shown
+  // on the TRMNL X, hidden on the OG. Hiding it does not stop this script
+  // (or the MapLibre download) from running, so wait until the canvas is
+  // actually displayed and draw nothing if it never is. A short wait
+  // rather than a one-shot check, in case the screen size classes are
+  // applied after this script first runs. In Full and Half Vertical the
+  // canvas is always shown and this passes on the first check.
+  function whenShown(cb) {
+    var tries = 0;
+    (function check() {
+      if (el && window.getComputedStyle(el).display !== "none") return cb();
+      if (++tries > 20) return;
+      setTimeout(check, 50);
+    })();
   }
+  whenShown(function () {
+    if (USE_MAP) {
+      drawMap();
+    } else if (window.TRMNLPaint && TRMNLPaint.watch) {
+      TRMNLPaint.watch(el, drawPolar);
+    } else {
+      drawPolar();
+    }
+  });
 })();
 </script>
 {% else %}

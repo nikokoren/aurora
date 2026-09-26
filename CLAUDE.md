@@ -80,10 +80,11 @@ Don't assume a change is correct just because it looks right.
 - **Script layout is the same in every view.** The `shrinkToFit` script
   is identical in all four files and sits after the final
   `{% endif %}`, so it also fits the error message. The map/polar chart
-  script exists only in `full.liquid.txt` and `half_vertical.liquid.txt`,
-  sits inside the `aurora.ok` branch (it has nothing to draw otherwise,
+  script is also in all four views (Half Horizontal and Quadrant show
+  the visual on the TRMNL X only), sits inside the `aurora.ok` branch
+  (it has nothing to draw otherwise,
   and threw on the error path when it lived outside), and is
-  byte-identical between those two. To propagate a change: find the
+  byte-identical across all four. To propagate a change: find the
   block by its content (`var A = {{ aurora | json }}` for the map
   script, `function shrinkToFit` for the other), not by position,
   a first-match or fixed-index lookup has already shipped a no-op
@@ -147,9 +148,9 @@ even if it's only needed in one language today.
 |---|---|
 | `serverless.js.txt` | Serverless function: NOAA fetch, Kp forecast, geomagnetic math, all `LOCALES` text |
 | `full.liquid.txt` | Full view, both visual modes (polar chart / real map), poleward-biased map centering |
-| `half_horizontal.liquid.txt` | Half Horizontal view (800x240): verdict left, time/direction compact right, no visual |
+| `half_horizontal.liquid.txt` | Half Horizontal view (800x240): verdict block plus 3-night strip in a row; on TRMNL X also the visual (map or polar chart) |
 | `half_vertical.liquid.txt` | Half Vertical view (400x480): same visual modes as Full, stacked column layout |
-| `quadrant.liquid.txt` | Quadrant view (400x240): verdict plus compact 3-night strip, no visual |
+| `quadrant.liquid.txt` | Quadrant view (400x240): verdict plus compact 3-night strip; on TRMNL X also the visual (map or polar chart) |
 | `form_fields.yml.txt` | Plugin settings form: location (lat_lon field), map toggle, voice, language |
 | `PROJECT.md` | Architecture and decisions, read this first |
 | `CLAUDE.md` | This file |
@@ -179,6 +180,15 @@ even if it's only needed in one language today.
   framework's, so the framework class would lose and collapse the map;
   checked against MapLibre 5.24.0's source CSS); and the font size
   `shrinkToFit` writes at render time. Don't "clean up" those three.
+- **Device-specific elements use the Visibility utilities, e.g.
+  `hidden lg:block`** (`lg:` matches only the TRMNL X today). Size
+  prefixes follow the device, not the view slot, so an X Quadrant still
+  counts as `lg`. Hiding is CSS only: scripts in a hidden element still
+  run and script tags still download. The shared map script therefore
+  waits for the canvas to be displayed (`whenShown`) and draws nothing
+  if it never is. A size prefix on layout direction (`lg:layout--row`)
+  is not documented, so don't rely on it; make the hidden element one
+  more child of a row instead, as Half Horizontal and Quadrant do.
 - **Never mutate the MapLibre style object `TRMNLMaps.options()`
   returns.** Chased a missing-borders/missing-water bug through five
   variants of rewriting `style.layers` before proving, with isolated
