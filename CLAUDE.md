@@ -3,19 +3,55 @@
 Read PROJECT.md first, it has the architecture and every non-obvious
 decision. This file is the day-to-day rules.
 
-## No test suite, verify against the live plugin
+## Working method (adopted 2026-09-27, applies to every TRMNL recipe)
 
-Everything so far has been checked with offline Node scripts that mock
-`fetch()` (see the sanity checks used during development, not committed
-here) plus manual review of the rendered screen. There is no CI. Before
-calling a change done, either:
+1. **Never verify against input you invented.** Test payloads must be
+   captured from the live API, or come from the fixture corpus built from
+   captured responses. A bug found only in made-up data isn't a bug.
+2. **Sweep the state space, don't spot-check.** Render every combination
+   that matters (states x languages x voices x views x devices) and compare
+   outputs. Report results as numbers (for example "6/6 identical before,
+   0/6 after"); that number is also the proof of the fix.
+3. **Re-fetch versioned docs; memory is stale.** Use unversioned URLs,
+   stamp what was verified and when, and the web wins on disagreement.
+4. **"Not there" needs proof, not recall.** Search every relevant place and
+   say what was searched: "checked X and Y, zero hits" is a different claim
+   from "I don't think so".
+5. **Prove fixes, don't assert them.** Reproduce the failure, show it gone,
+   and diff outputs before and after (for example "removed 3, added 0,
+   kept 25"). Where only a device can prove it, say "not confirmed on
+   device" instead of "fixed".
+6. **Run real data through new copy before shipping it.** Every new phrase
+   goes through real payloads in every state it can appear in, so
+   contradictions show up before users see them.
+7. **State corrections in one line, then move on.**
+8. **Write memory down, dated, with a re-check instruction.** Agents have no
+   memory across sessions; the repo is the memory. Every stated fact about
+   an outside system carries its version, date, and "re-fetch before
+   relying on this".
+9. **Assume concurrent agents.** In a long session, re-read a file before
+   editing it; don't trust your last-known main.
 
-- run the relevant piece through `node --check` at minimum for syntax,
-  and a mocked-fetch script for logic, or
-- push to the actual TRMNL private plugin and force-refresh with Debug
-  Logs on, and read the real output.
+In this repo specifically: the files in `fixtures/` are synthetic (a
+made-up storm for the store image), so they must never be used to verify
+logic (point 1). Real verification data means captured NOAA responses,
+which don't exist in the repo yet; start that corpus before the next
+logic change. The sweep for point 2 here is 4 verdict tiers x 4 timing
+states x 2 languages x 2 voices x 4 views, plus devices and orientations
+for anything visual.
 
-Don't assume a change is correct just because it looks right.
+## No test suite yet, verify against real data
+
+There is no CI. Development checks so far were offline Node scripts
+mocking `fetch()`, and some of those mocks used invented response shapes,
+which the working method above rules out: from now on, mocks replay
+captured real responses only. Before calling a change done:
+
+- `node --check` for syntax, at minimum;
+- a sweep over captured real responses for logic (point 2);
+- for anything visual, the actual TRMNL private plugin with Debug Logs on,
+  and the result stated as "confirmed on device" or "not confirmed on
+  device".
 
 ## Style
 
@@ -27,9 +63,10 @@ Don't assume a change is correct just because it looks right.
   extension is just to keep this repo's files plain-text friendly.
 - Native TRMNL Framework classes only (currently 3.3). No hand-rolled
   CSS for anything the framework already has a component or utility
-  for. Check `https://trmnl.com/framework/docs/3.3` before assuming a
-  class name; the framework has moved fast (v2 to v3.3 in one year) and
-  training data is likely stale. This includes not defaulting to a
+  for. Check the unversioned docs at `https://trmnl.com/framework/docs/`
+  before assuming a class name (verified 2026-09-27: it served 3.3; mirrors
+  and cached release pages still called 3.1.1 "latest", so re-fetch before
+  relying on any version number here, and the web wins on disagreement). This includes not defaulting to a
   generic `flex flex--row` when there is a more specific component for
   the job: for a row of same-shaped repeated items that should split
   evenly (a 3-night forecast strip, anything list-like), that is the
