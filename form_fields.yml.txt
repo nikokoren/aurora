@@ -18,6 +18,16 @@
   default: "false"
   optional: true
 
+- keyname: time_format
+  field_type: select
+  name: Time format
+  description: How clock times are shown (for example the best-viewing window).
+  options:
+    - "24h"
+    - "12h"
+  default: "24h"
+  optional: true
+
 - keyname: voice
   field_type: select
   name: Voice

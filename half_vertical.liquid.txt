@@ -17,12 +17,21 @@
   understood. full.liquid.txt uses stretch-y in landscape (row) and
   portrait:stretch-x in portrait (col) for the same reason.
 
-  Forecast strip: Grid, one night per row on the OG (too narrow for three
-  side by side), three across on the TRMNL X (grid--cols-1
-  lg:grid--cols-3). Font sizes (lg:value--large
-  headline, value--xsmall per-night word) are Niko's own on-device
-  tuning for this narrow column, deliberately smaller than the other
-  views, keep them.
+  Forecast strip: Grid, three across in landscape (this slot is 400px
+  wide there, same as Quadrant's own OG landscape, which already fits
+  three across at a larger font than this view's), one per row in OG
+  portrait where the slot is genuinely too narrow, three across on the
+  TRMNL X regardless of orientation. Base grid--cols-3 covers OG and X
+  landscape both; portrait:grid--cols-1 covers OG portrait; the X in
+  portrait needs its own lg:portrait:grid--cols-3, since without it
+  portrait:grid--cols-1 (one modifier) and the plain lg: rule this used
+  to be (also one modifier) would tie for specificity there, unlike
+  before this change, which had no plain portrait: rule to compete with
+  at all. The two-modifier override always wins when both conditions
+  hold, confirmed in the Responsive docs, not assumed. Font sizes
+  (lg:value--large headline, value--xsmall per-night word) are Niko's
+  own on-device tuning for this narrow column, deliberately smaller than
+  the other views, keep them.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <link rel="preconnect" href="https://trmnl.com" crossorigin>
@@ -55,7 +64,7 @@
     {% endif %}
     {% if aurora.forecast and aurora.forecast.size > 0 %}
     <div class="divider"></div>
-    <div class="grid grid--cols-1 lg:grid--cols-3">
+    <div class="grid grid--cols-3 portrait:grid--cols-1 lg:portrait:grid--cols-3">
       {% for night in aurora.forecast %}
       <div class="flex flex--col flex--center-x">
         <span class="label">{{ night.label | upcase }}</span>

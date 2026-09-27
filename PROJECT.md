@@ -1074,6 +1074,92 @@ spills. Trade-off: the location marker now scales with the chart
 slots instead of a fixed 12. Test data is the synthetic storefront
 fixture, which is fine for geometry only. Not yet confirmed on device.
 
+**Times use the viewing device's own time zone, `trmnl.user.time_zone_iana`;
+a real duplicate-forecast bug found and fixed along the way; 12h/24h added
+as a setting.**
+Briefly changed this to derive a time zone from the entered coordinates
+instead, on the reasoning that the device and the location being
+described aren't always the same place. Reverted: this recipe is built
+for the common case, checking conditions wherever your TRMNL already is,
+not an arbitrary remote location, and `time_zone_iana` already gives an
+accurate, DST-aware zone for free, nothing to approximate. The
+coordinate-based attempt also could only ever approximate anyway (no
+free geo-timezone lookup has commercial-friendly terms, so it fell back
+to a longitude-only guess, wrong for places like India, and blind to
+DST entirely), so reverting traded away a real, if narrow, accuracy
+problem along with the narrower use case it was solving for.
+`validZone()`, `fmt()`, `localDateKey()`, and `weekdayName()` are back to
+their original `Intl`-based forms.
+
+While tracing exactly how the forecast strip's day labels are chosen (a
+direct question: "the forecast skips tonight, when does that happen"),
+found and fixed a real, distinct bug, verified with a fine-grained sweep
+of `build()` across a real day rather than guessed at: for roughly two
+hours around local midnight, the tail of an already-active dark window
+and the start of the next one can both fall on the same local calendar
+date, and both got labeled "Tonight", a genuine duplicate. For about 45
+minutes after that, until the next window fully settles into the lookout
+range, the strip understandably drops to 2 entries; that part was never
+a bug, just an honest reflection of there being only 2 distinct dark
+nights identified at that specific moment. Fixed the duplicate by
+skipping a forecast entry that repeats the immediately preceding label,
+windows are chronological so this always keeps the nearer, already-active
+one. This was never about which time zone is used for the boundary, it
+would have happened under the old device-time-zone logic too, just at a
+different clock time.
+
+Added a `time_format` setting (24h default, or 12h with AM/PM), threaded
+through the same `fmt()` used everywhere clock times appear.
+
+**Half Horizontal restructured on the TRMNL X: visual as a left column
+in both orientations, title stacked above the forecast. Half Vertical's
+forecast goes three across in OG landscape.**
+Half Horizontal previously showed the visual, verdict block and forecast
+strip as three separate row-level items, which meant `portrait:layout--
+col` (needed so the OG, where the visual is invisible, still reflows
+sensibly) also flattened the X's row into a column in portrait, taking
+away the space the map's own half was meant to free up. Restructured to
+two top-level items: the canvas, and one verdict+forecast column.
+Outer layout is row by default and specifically on `lg:portrait` (an
+`lg:portrait:layout--row` override beats the plain `portrait:layout--
+col` the OG still needs; more modifiers wins when both conditions hold,
+confirmed in the Responsive docs, not assumed), only actually reflowing
+on the OG in portrait, where it's visually inert anyway since the
+canvas is hidden there regardless. The verdict+forecast column is its
+own flex, row on the OG in landscape only (matching what it already
+looked like there), column everywhere else, including X in both
+orientations now; `portrait:flex--col` and `lg:flex--col` independently
+agree wherever they overlap (X portrait), so no combined modifier was
+needed for that one. Added a divider between the verdict block and the
+forecast, checked the full git history first (grepped every commit
+touching this file for the word, not there once): this view never had
+one before, unlike the other three, it isn't something that regressed.
+
+Half Vertical's forecast strip goes three across in OG landscape now
+(previously one per row everywhere except the X); it's 400px wide
+there, the same width Quadrant's OG landscape already fits three across
+at, with a larger font than this view uses. `grid--cols-3` covers OG
+and X landscape both now; `portrait:grid--cols-1` covers OG portrait,
+where the slot is still genuinely narrow. The X in portrait needed its
+own `lg:portrait:grid--cols-3`: without it, the new `portrait:grid--
+cols-1` and the plain `lg:` rule that used to cover the X alone (both
+one modifier) would tie for specificity there, a conflict that never
+existed before this change since there was no plain `portrait:` rule to
+compete with.
+
+Both of these rest on a confirmed CSS-specificity rule (checked the
+current Responsive docs directly, not assumed: a class with more
+modifiers always wins over one with fewer when both conditions hold)
+and, for Half Vertical, a working precedent already in this same
+codebase at the identical width. Unlike the polar chart fix, this could
+not be verified by rendering: the framework's own CSS is hosted at
+trmnl.com and isn't reachable from this sandbox, only the Liquid/JS
+logic can be exercised locally. Not yet confirmed on device.
+
+**Times now shown in local time at the coordinates, not the viewing
+device's; a real duplicate-forecast-label bug found and fixed; 12h/24h
+setting added.** See the entry below this one for the full account.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

@@ -1,30 +1,37 @@
 {% comment %}
   Aurora Watch, Half Horizontal view (800x240 on OG landscape). Wide,
-  short: verdict and, when there's anything to say about timing, the
-  time window and compass hint stacked directly underneath it, all in
-  one growing left block, rather than a fixed-width right column that
-  sat mostly blank on quiet nights and awkwardly held two short lines
-  on busy ones. The reclaimed right side is a compact 3-night forecast
-  strip instead, mirroring Quadrant's proven verdict + 3-night layout,
-  just side by side here instead of stacked, there's the width for it.
-  Only present when there's forecast data at all; the left block grows
-  to fill the full width on its own when there isn't. Location lives in
-  the title bar (bottom right), same as every other view.
+  short. Verdict and, when there's anything to say about timing, the
+  time window and compass hint stacked directly underneath it; a
+  divider; then a compact 3-night forecast strip, mirroring Quadrant's
+  proven verdict + 3-night layout. On the OG, where there's no visual
+  (see below), that whole block sits side by side in landscape (the
+  width is there for it) and stacks in portrait. Only present when
+  there's forecast data at all; the verdict block grows to fill the
+  full width on its own when there isn't. Location lives in the title
+  bar (bottom right), same as every other view.
   Mashup slot dimensions are derived from the screen's own width/height,
   which swap under screen--portrait, so this is not reliably 800x240,
   a portrait-oriented device makes this cell much narrower and taller,
-  not wide and short. portrait:layout--col reflows verdict-then-
-  forecast to stacked instead of squeezing a row into a cell that is no
-  longer wide, same pattern as full.liquid.txt.
+  not wide and short.
   Verdict length varies a lot, same reasoning as Quadrant: fit-to-box
   instead of one fixed font size.
   On the TRMNL X the view also shows the aurora visual (polar chart or
-  real map, per the use_real_map setting) as the first item in the row.
-  It is hidden on the OG, where this slot has no room for it; the OG
-  layout is otherwise unchanged. MapLibre is still downloaded on the OG
-  when use_real_map is on (a hidden element doesn't stop a script tag),
-  but the drawing code waits for the canvas to be shown and does nothing
-  if it never is.
+  real map, per the use_real_map setting) as a left-hand column, roughly
+  half the width, in BOTH orientations: the outer layout is row by
+  default and on lg:portrait (an lg:portrait:layout--row override beats
+  the plain portrait:layout--col rule the OG still needs, more modifiers
+  wins when both conditions hold, confirmed in the Responsive docs), only
+  actually reflowing to a column on the OG in portrait, where the visual
+  is hidden anyway so it makes no visible difference. The verdict+
+  forecast block is its own second column next to the visual on X, title
+  stacked above the forecast rather than beside it (portrait:flex--col
+  and lg:flex--col independently agree wherever they overlap, X
+  portrait, so no combined modifier is needed for this one). It is
+  hidden on the OG, where this slot has no room for it; the OG layout is
+  otherwise unchanged. MapLibre is still downloaded on the OG when
+  use_real_map is on (a hidden element doesn't stop a script tag), but
+  the drawing code waits for the canvas to be shown and does nothing if
+  it never is.
 {% endcomment %}
 {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
 <link rel="preconnect" href="https://trmnl.com" crossorigin>
@@ -32,37 +39,40 @@
 <link href="https://trmnl.com/js/maplibre-gl/5.24.0/maplibre-gl.css" rel="stylesheet">
 {% endif %}
 {% if aurora.ok %}
-<div class="layout layout--row portrait:layout--col layout--stretch gap">
+<div class="layout layout--row portrait:layout--col lg:portrait:layout--row layout--stretch gap">
   {% comment %}
     X-only visual: "hidden lg:block" hides it on the OG and shows it on the
     TRMNL X, where even this slot has room. Same toggle, same drawing code
     and same canvas rules as full.liquid.txt (see its comments for why
     stretch-y portrait:stretch-x, and why the map element keeps its inline style).
   {% endcomment %}
-  <div id="aurora-canvas" class="hidden lg:block grow stretch-y portrait:stretch-x relative">
+  <div id="aurora-canvas" class="hidden lg:block grow stretch-y portrait:stretch-x lg:portrait:stretch-y relative">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}
   </div>
-  <div class="flex flex--col flex--center text--center gap grow">
-    <span class="value value--xlarge" data-value-fit="true" data-value-fit-max-height="110">{{ aurora.verdict | upcase }}</span>
-    {% if aurora.level > 0 %}
-    <span class="title title--small">{{ aurora.line }}</span>
-    <span class="description">{{ aurora.look }}</span>
+  <div class="flex flex--row portrait:flex--col lg:flex--col flex--center text--center gap grow">
+    <div class="flex flex--col flex--center text--center gap grow">
+      <span class="value value--xlarge" data-value-fit="true" data-value-fit-max-height="110">{{ aurora.verdict | upcase }}</span>
+      {% if aurora.level > 0 %}
+      <span class="title title--small">{{ aurora.line }}</span>
+      <span class="description">{{ aurora.look }}</span>
+      {% endif %}
+    </div>
+    {% if aurora.forecast and aurora.forecast.size > 0 %}
+    <div class="divider"></div>
+    <div class="flex flex--col flex--center shrink-0 w--72 portrait:w--full lg:w--full">
+      <div class="grid grid--cols-3">
+        {% for night in aurora.forecast %}
+        <div class="flex flex--col flex--center-x">
+          <span class="label">{{ night.label | upcase }}</span>
+          <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
     {% endif %}
   </div>
-  {% if aurora.forecast and aurora.forecast.size > 0 %}
-  <div class="flex flex--col flex--center shrink-0 w--72 portrait:w--full">
-    <div class="grid grid--cols-3">
-      {% for night in aurora.forecast %}
-      <div class="flex flex--col flex--center-x">
-        <span class="label">{{ night.label | upcase }}</span>
-        <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
 </div>
 <div class="title_bar">
   <span class="title">Aurora Watch</span>
