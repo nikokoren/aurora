@@ -49,8 +49,556 @@ const LOCALES = {
   en: {
     voices: {
       facts: {
-        hero: [["Minimal chance"], ["Low chance"], ["Good chance"], ["Excellent chance"]],
-        short: ["Minimal", "Low", "Good", "Great"],
+        hero: [["No chance"], ["Low chance"], ["Good chance"], ["Excellent chance"]],
+        short: ["None", "Low", "Good", "High"],
+        timing: {
+          window: (from, to) => "Best time: " + from + " to " + to,
+          darkNow: "Best time: now",
+          darkLater: (t) => "Best time: from " + t,
+          neverDark: "Best time: none, too bright",
+        },
+        lookOverhead: ["Direction: straight up"],
+        lookToward: ["Direction: {dir}"],
+      },
+      astrophysicist: {
+        hero: [
+          ["Quiet up there", "Space weather is calm", "Nothing brewing"],
+          ["A faint maybe", "Barely a flicker", "Don't get your hopes up"],
+          ["Now we're talking", "This looks promising", "Grab your jacket"],
+          ["Red alert!", "This is big!", "Don't miss this!"],
+        ],
+        short: ["Quiet", "Maybe", "Nice", "Wow!"],
+        timing: {
+          window: (from, to) => "Your best shot is " + from + " to " + to,
+          darkNow: "Your best shot is now, it's already dark",
+          darkLater: (t) => "Your best shot starts at " + t + ", once it's dark",
+          neverDark: "Sadly the sun won't sink low enough to get dark",
+        },
+        lookOverhead: ["Forget the compass, just look straight up", "Tip your head back, this one's overhead", "Just look up, the oval sits right above you"],
+        lookToward: ["Face {dir} and scan low over the horizon", "Keep your eyes on the sky to the {dir}", "Turn {dir}, away from any city glow"],
+      },
+    },
+    ui: {
+      now: "now",
+      tonight: "Tonight",
+      tomorrow: "Tomorrow",
+      kpLabel: "Kp",
+      modelLabel: "model",
+      oldData: "old data",
+      unavailableTitle: "Aurora data unavailable",
+      unavailableSub: "The space weather service didn't respond. Trying again on the next refresh.",
+      dirNorth: "north",
+      dirSouth: "south",
+      compassN: "N", compassS: "S", compassE: "E", compassW: "W",
+      weekdayLocale: "en-GB",
+    },
+  },
+  de: {
+    voices: {
+      facts: {
+        hero: [["Keine Chance"], ["Geringe Chance"], ["Gute Chance"], ["Sehr gute Chance"]],
+        short: ["Keine", "Gering", "Gut", "Hoch"],
+        timing: {
+          window: (from, to) => "Beste Zeit: " + from + " bis " + to,
+          darkNow: "Beste Zeit: jetzt",
+          darkLater: (t) => "Beste Zeit: ab " + t,
+          neverDark: "Beste Zeit: keine, zu hell",
+        },
+        lookOverhead: ["Richtung: nach oben"],
+        lookToward: ["Richtung: {dir}"],
+      },
+      astrophysicist: {
+        hero: [
+          ["Ruhig da oben", "Gerade nichts los", "Die Sonne döst"],
+          ["Ein leises Vielleicht", "Kaum ein Flackern", "Mach dir keine Hoffnungen"],
+          ["Jetzt wird's spannend", "Das sieht gut aus", "Schnapp dir die Jacke"],
+          ["Alarmstufe rot!", "Das ist riesig!", "Verpass das nicht!"],
+        ],
+        short: ["Ruhig", "Möglich", "Stark", "Wow!"],
+        timing: {
+          window: (from, to) => "Am besten zwischen " + from + " und " + to,
+          darkNow: "Am besten jetzt, es ist schon dunkel",
+          darkLater: (t) => "Am besten ab " + t + ", dann ist es dunkel",
+          neverDark: "Leider sinkt die Sonne nicht tief genug",
+        },
+        lookOverhead: ["Vergiss den Kompass, schau einfach nach oben", "Kopf in den Nacken, direkt über dir", "Schau nach oben, das Oval liegt direkt über dir"],
+        lookToward: ["Schau Richtung {dir}, tief am Horizont", "Behalte den Himmel im {dir} im Blick", "Dreh dich nach {dir}, weg vom Stadtlicht"],
+      },
+    },
+    ui: {
+      now: "jetzt",
+      tonight: "Heute",
+      tomorrow: "Morgen",
+      kpLabel: "Kp",
+      modelLabel: "Modell",
+      oldData: "veraltete Daten",
+      unavailableTitle: "Polarlichtdaten nicht verfügbar",
+      unavailableSub: "Der Datendienst hat nicht geantwortet. Neuer Versuch beim nächsten Aktualisieren.",
+      dirNorth: "Norden",
+      dirSouth: "Süden",
+      compassN: "N", compassS: "S", compassE: "O", compassW: "W",
+      weekdayLocale: "de-DE",
+    },
+  },
+};
+
+function locale(input) {
+  const key = String(field(input, "language", "en")).trim().toLowerCase();
+  return LOCALES[key] || LOCALES.en;
+}
+
+const DARK_ALT = -12;                   // sun altitude (degrees) that counts as dark
+const POLE = { lat: 80.7, lon: -72.7 }; // centred dipole geomagnetic pole, approximate
+const ROWS = 30;                        // polar grid: 2 degree rings from the pole to 30 degrees
+const COLS = 72;                        // 5 degree longitude cells
+const STEP = 5 * 60000;
+const HOUR = 3600000;
+const RAD = Math.PI / 180;
+
+async function run(input) {
+  try {
+    return { aurora: await build(input) };
+  } catch (e) {
+    const L = locale(input);
+    return { aurora: { ok: false, reason: String((e && e.message) || e), title: L.ui.unavailableTitle, sub: L.ui.unavailableSub } };
+  }
+}
+
+async function build(input) {
+  const L = locale(input);
+  // The lat_lon field type returns one comma-separated "lat,lon" string,
+  // however the user got there (typed coordinates or picked a place from
+  // its autocomplete).
+  const latLonRaw = String(field(input, "lat_lon", "48.1351,11.5820")).split(",");
+  const lat = parseFloat(latLonRaw[0]);
+  const lon = parseFloat(latLonRaw[1]);
+  if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    throw new Error("Invalid coordinates");
+  }
+  const name = String(field(input, "location_name", "")).trim() || coordLabel(lat, lon, L);
+
+  // Times are shown in local time AT THE COORDINATES, not the viewing
+  // device's own time zone: the device and the aurora can be anywhere on
+  // Earth relative to each other, so the device's zone could be many
+  // hours off from what's actually being described. There is no IANA
+  // time zone database available in this single-file, no-dependency
+  // serverless function, and every free lookup service found (including
+  // Open-Meteo, which otherwise fits this project's style closely) is
+  // non-commercial-use only, which this project avoids on the same
+  // reasoning already applied to Animal Migration and Where Does the
+  // Rain Go: Creator Fund payouts scale with usage and come from company
+  // revenue, so this project treats itself as potentially commercial.
+  // Approximated instead from longitude alone (15 degrees per hour,
+  // rounded), no network call, no license question, but a real accuracy
+  // trade-off: no timezone-boundary correction (wrong for places like
+  // India, UTC+5:30, or China, one zone, UTC+8, despite spanning far
+  // more longitude than that), and no daylight saving time at all,
+  // since DST rules are jurisdiction-specific and can't be derived from
+  // geography. Expect displayed times to be off by exactly one hour
+  // during whatever months the location observes DST. Still strictly
+  // better than the device's own time zone, which could be off by many
+  // hours or a full calendar day rather than at most about 1.5.
+  // "(UTC+1)" (etc.) is shown alongside every clock time so it's never
+  // ambiguous which time zone is meant, now that it isn't necessarily
+  // the viewer's own.
+  const tzOffsetMin = Math.max(-720, Math.min(840, Math.round(lon / 15) * 60));
+  const tzShift = (ms) => ms + tzOffsetMin * 60000;
+  const tzLabel = "(UTC" + (tzOffsetMin >= 0 ? "+" : "") + (tzOffsetMin / 60) + ")";
+  const use12h = String(field(input, "time_format", "24h")).trim() === "12h";
+  const fmt = (ms) => {
+    const d = new Date(tzShift(ms));
+    let h = d.getUTCHours(), m = String(d.getUTCMinutes()).padStart(2, "0");
+    if (!use12h) return String(h).padStart(2, "0") + ":" + m + " " + tzLabel;
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return h + ":" + m + " " + ap + " " + tzLabel;
+  };
+  const r15 = (ms) => Math.round(ms / 900000) * 900000;
+
+  // 1. OVATION grid
+  let src = null;
+  if (input && Array.isArray(input.coordinates)) src = input;
+  else if (input && input.data && Array.isArray(input.data.coordinates)) src = input.data;
+  if (!src) {
+    const res = await fetch(OVATION_URL);
+    if (!res.ok) throw new Error("NOAA returned " + res.status);
+    src = await res.json();
+  }
+  const coords = src.coordinates;
+  if (!Array.isArray(coords) || coords.length < 60000) throw new Error("OVATION data incomplete");
+
+  const grid = new Uint8Array(360 * 181);
+  for (const c of coords) {
+    const lo = Math.round(c[0]);
+    const la = Math.round(c[1]);
+    const v = Number(c[2]);
+    if (!isFinite(v) || la < -90 || la > 90) continue;
+    grid[(((lo % 360) + 360) % 360) * 181 + la + 90] = Math.max(0, Math.min(100, Math.round(v)));
+  }
+  const at = (la, lo) => {
+    la = Math.max(-90, Math.min(90, Math.round(la)));
+    lo = ((Math.round(lo) % 360) + 360) % 360;
+    return grid[lo * 181 + la + 90];
+  };
+
+  // 2. Aurora near the user. Overhead, plus what shows low on the poleward horizon
+  //    (aurora glows high in the sky, so it is visible several degrees away).
+  const hemi = lat >= 0 ? 1 : -1;
+  let here = 0;
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) here = Math.max(here, at(lat + a, lon + b));
+  const span = Math.min(20, Math.round(6 / Math.max(0.3, Math.cos(lat * RAD))));
+  let toward = 0;
+  for (let d = 2; d <= 8; d++) for (let b = -span; b <= span; b++) toward = Math.max(toward, at(lat + hemi * d, lon + b));
+  const chance = Math.max(here, toward * 0.5);
+  const level = LEVELS.find((l) => chance >= l.min);
+
+  const voiceKey = String(field(input, "voice", "facts")).trim().toLowerCase();
+  const voice = L.voices[voiceKey] || L.voices.facts;
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // 3. Darkness and the window around magnetic midnight
+  const now = Date.now();
+  const dark = (t) => sunAlt(sunState(t), lat, lon) < DARK_ALT;
+  const darkNow = dark(now);
+
+  // Up to 3 magnetic-midnight crossings ahead (tonight, tomorrow, the night
+  // after), each checked for an actual dark window around it. "windows"
+  // feeds both the existing "Best chance" line (windows[0]) and the
+  // 3-night forecast strip below.
+  const crossings = [];
+  let prev = mlt(now - 3 * HOUR, lat, lon);
+  for (let t = now - 3 * HOUR + STEP; t <= now + 75 * HOUR && crossings.length < 3; t += STEP) {
+    const cur = mlt(t, lat, lon);
+    if (prev > 12 && cur < 12 && prev - cur > 12) crossings.push(t);
+    prev = cur;
+  }
+  const windows = [];
+  for (const m of crossings) {
+    let s = null, e = null;
+    for (let t = Math.max(now, m - 2 * HOUR); t <= m + 2 * HOUR; t += STEP) {
+      if (dark(t)) { if (s === null) s = t; e = t; }
+    }
+    if (s !== null) windows.push({ s, e });
+  }
+  const win = windows[0] || null;
+  let darkStart = null;
+  if (!darkNow) {
+    for (let t = now; t <= now + 24 * HOUR; t += STEP) if (dark(t)) { darkStart = t; break; }
+  }
+
+  let line;
+  if (win && level.rank > 0) {
+    const from = win.s - now < 10 * 60000 ? L.ui.now : fmt(r15(win.s));
+    line = voice.timing.window(from, fmt(r15(win.e)));
+  } else if (darkNow) line = voice.timing.darkNow;
+  else if (darkStart) line = voice.timing.darkLater(fmt(r15(darkStart)));
+  else line = voice.timing.neverDark;
+
+  let look = "";
+  if (level.rank > 0) {
+    if (here >= 30) look = pick(voice.lookOverhead);
+    else look = pick(voice.lookToward).replace("{dir}", hemi > 0 ? L.ui.dirNorth : L.ui.dirSouth);
+  }
+
+  const verdict = pick(voice.hero[level.rank]);
+
+  // 4. Freshness and Kp
+  const forecastMs = Date.parse(src["Forecast Time"] || "");
+  const stale = isFinite(forecastMs) ? now - forecastMs > 3 * HOUR : false;
+  const kp = await getKp();
+  const bits = [];
+  if (kp !== null) bits.push(L.ui.kpLabel + " " + kp);
+  if (isFinite(forecastMs)) bits.push(L.ui.modelLabel + " " + fmt(forecastMs));
+  if (stale) bits.push(L.ui.oldData);
+
+  // 4b. Three-night Kp forecast strip. Kp only gives one number for the
+  // whole planet, so this collapses to a rough viewline check rather than
+  // the OVATION nowcast's actual oval shape: how many degrees north of
+  // that Kp's typical equatorward edge the viewer sits.
+  const userMagLat = Math.abs(geomagLat(lat, lon));
+  const { points: kpPoints, debug: forecastDebug } = await getKpForecast();
+  const todayKey = localDateKey(now, tzOffsetMin);
+  const tomorrowKey = localDateKey(now + 24 * HOUR, tzOffsetMin);
+  const forecast = [];
+  let lastLabel = null;
+  for (const w of windows) {
+    const inWindow = kpPoints.filter((p) => p.t + 3 * HOUR >= w.s && p.t <= w.e);
+    if (!inWindow.length) continue;
+    const maxKp = Math.max.apply(null, inWindow.map((p) => p.kp));
+    const margin = userMagLat - kpViewLat(maxKp);
+    const flevel = FORECAST_LEVELS.find((l) => margin >= l.min);
+    const dayKey = localDateKey(w.s, tzOffsetMin);
+    const label = dayKey === todayKey ? L.ui.tonight : dayKey === tomorrowKey ? L.ui.tomorrow
+      : weekdayName(w.s, tzOffsetMin, L.ui.weekdayLocale);
+    // A magnetic-midnight window can straddle local midnight: the tail
+    // end of tonight's still-active window and the very start of the
+    // next distinct window can both fall on today's local calendar date,
+    // producing two entries both labeled "Tonight" for roughly the
+    // couple of hours around local midnight (proven with a fine-grained
+    // sweep of build() across that period, not assumed). Since windows
+    // are chronological, the first is always the nearer, already-active
+    // one; drop a later entry that repeats the immediately preceding
+    // label rather than show the same night twice.
+    if (label === lastLabel) continue;
+    lastLabel = label;
+    forecast.push({ label, kp: Math.round(maxKp * 10) / 10, verdict: voice.short[flevel.rank], rank: flevel.rank });
+  }
+  // Visible only in Debug Logs (not rendered), to answer "why is the strip
+  // empty" without guessing: how many dark windows were found for the next
+  // 3 nights, how the Kp forecast fetch/parse went, and how many of those
+  // windows actually had overlapping forecast data.
+  const debug = {
+    windows: windows.length,
+    kp_forecast: forecastDebug,
+    forecast_entries: forecast.length,
+  };
+
+  // 5. Polar grid for the hero graphic: digits 0 to 9, ring by ring from the pole
+  let cells = "";
+  for (let i = 0; i < ROWS; i++) {
+    const l0 = hemi * (90 - 2 * i);
+    const l1 = hemi * (90 - 2 * i - 1);
+    for (let j = 0; j < COLS; j++) {
+      let v = 0;
+      for (const la of [l0, l1]) for (let b = 0; b < 5; b++) v = Math.max(v, at(la, 5 * j + b));
+      cells += v < 1 ? "0" : String(Math.min(9, Math.round(Math.sqrt(v) * 1.1)));
+    }
+  }
+  const userColat = 90 - Math.abs(lat);
+  const maxColat = Math.min(60, Math.max(36, 2 * Math.ceil((userColat + 12) / 2)));
+
+  // Geographic window for the real map mode: a band around the user.
+  // 1 degree steps (vs. the polar chart's 2) so the stipple below has
+  // enough dots per cell cluster to read as a soft curtain rather than a
+  // grid; still comfortably under the 100 KB payload cap.
+  const GEO_LAT_LO = hemi > 0 ? 34 : -84;
+  const GEO_LAT_HI = hemi > 0 ? 84 : -34;
+  const GEO_LON_SPAN = 45; // degrees each side of the user
+  let geoCells = "";
+  let geoRows = 0, geoCols = 0;
+  {
+    const latStep = 1, lonStep = 1;
+    const lo0 = Math.floor((lon - GEO_LON_SPAN) / lonStep) * lonStep;
+    const lo1 = Math.ceil((lon + GEO_LON_SPAN) / lonStep) * lonStep;
+    geoCols = Math.round((lo1 - lo0) / lonStep) + 1;
+    geoRows = Math.round((GEO_LAT_HI - GEO_LAT_LO) / latStep) + 1;
+    for (let i = 0; i < geoRows; i++) {
+      const la = GEO_LAT_LO + i * latStep;
+      for (let j = 0; j < geoCols; j++) {
+        const lo = lo0 + j * lonStep;
+        const v = at(la, lo);
+        geoCells += v < 1 ? "0" : String(Math.min(9, Math.round(Math.sqrt(v) * 1.1)));
+      }
+    }
+    var geoLon0 = lo0, geoLatStep = latStep, geoLonStep = lonStep;
+  }
+
+  return {
+    ok: true,
+    name,
+    level: level.rank,
+    verdict,
+    chance: Math.round(chance),
+    line,
+    look,
+    footer: bits.join(", "),
+    stale,
+    forecast,
+    debug,
+    user_lon: ((lon % 360) + 360) % 360,
+    grid: { cells, rows: ROWS, cols: COLS, step_lat: 2, step_lon: 5, hemi, max_colat: maxColat, user_colat: userColat },
+    geo_grid: { cells: geoCells, rows: geoRows, cols: geoCols, lat0: GEO_LAT_LO, lon0: geoLon0, step_lat: geoLatStep, step_lon: geoLonStep },
+    user_lat: lat,
+  };
+}
+
+// ---------- helpers ----------
+
+function field(input, key, fallback) {
+  const sources = [
+    input && input.trmnl && input.trmnl.plugin_settings && input.trmnl.plugin_settings.custom_fields_values,
+    input && input.custom_fields_values,
+    input,
+  ];
+  for (const s of sources) {
+    if (s && s[key] !== undefined && s[key] !== null && String(s[key]).trim() !== "") return s[key];
+  }
+  return fallback;
+}
+
+
+function coordLabel(lat, lon, L) {
+  return Math.abs(lat).toFixed(1) + (lat >= 0 ? L.ui.compassN : L.ui.compassS) + " "
+    + Math.abs(lon).toFixed(1) + (lon >= 0 ? L.ui.compassE : L.ui.compassW);
+}
+
+async function getKp() {
+  try {
+    const res = await fetch(KP_URL, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) return null;
+    const arr = await res.json();
+    const last = arr[arr.length - 1];
+    const v = Number(last.estimated_kp !== undefined ? last.estimated_kp : last.kp_index);
+    return isFinite(v) ? Math.round(v * 10) / 10 : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseTimeTag(s) {
+  let t = Date.parse(s);
+  if (isFinite(t)) return t;
+  t = Date.parse(String(s).replace(" ", "T") + "Z");
+  return t;
+}
+
+// NOAA's classic /products/ JSON shape is an array of rows with a header
+// row naming the columns (this is the same format as e.g. kyoto-dst.json),
+// but that was never confirmed against a live fetch for this specific
+// endpoint, so this now tries a couple of plausible shapes and always
+// returns a "debug" string saying which one it found (or why it found
+// none), so a genuinely empty forecast strip is diagnosable from Debug
+// Logs instead of just silently showing nothing.
+async function getKpForecast() {
+  try {
+    const res = await fetch(KP_FORECAST_URL, { signal: AbortSignal.timeout(2500) });
+    if (!res.ok) return { points: [], debug: "http " + res.status };
+    const body = await res.json();
+
+    // Shape A: array of arrays, first row is column names (expected shape).
+    if (Array.isArray(body) && Array.isArray(body[0])) {
+      const header = body[0];
+      const iTime = header.indexOf("time_tag");
+      const iKp = header.indexOf("kp");
+      if (iTime >= 0 && iKp >= 0) {
+        const out = [];
+        for (let i = 1; i < body.length; i++) {
+          const t = parseTimeTag(body[i][iTime]);
+          const kp = parseFloat(body[i][iKp]);
+          if (isFinite(t) && isFinite(kp)) out.push({ t, kp });
+        }
+        out.sort((a, b) => a.t - b.t);
+        return { points: out, debug: "array-of-arrays, " + out.length + " rows parsed of " + (body.length - 1) };
+      }
+      return { points: [], debug: "array-of-arrays but no time_tag/kp columns in header: " + JSON.stringify(header) };
+    }
+
+    // Shape B: array of objects with some time/kp field naming.
+    if (Array.isArray(body) && body.length && typeof body[0] === "object") {
+      const sample = body[0];
+      const timeKey = ["time_tag", "time", "date", "timeTag"].find((k) => k in sample);
+      const kpKey = ["kp", "kp_index", "estimated_kp", "Kp"].find((k) => k in sample);
+      if (timeKey && kpKey) {
+        const out = [];
+        for (const row of body) {
+          const t = parseTimeTag(row[timeKey]);
+          const kp = parseFloat(row[kpKey]);
+          if (isFinite(t) && isFinite(kp)) out.push({ t, kp });
+        }
+        out.sort((a, b) => a.t - b.t);
+        return { points: out, debug: "array-of-objects (" + timeKey + "/" + kpKey + "), " + out.length + " rows parsed" };
+      }
+      return { points: [], debug: "array-of-objects, no recognized fields, sample keys: " + Object.keys(sample).join(",") };
+    }
+
+    return { points: [], debug: "unrecognized top-level shape: " + (Array.isArray(body) ? "empty array" : typeof body) };
+  } catch (e) {
+    return { points: [], debug: "fetch/parse threw: " + String((e && e.message) || e) };
+  }
+}
+
+function kpViewLat(kp) {
+  kp = Math.max(0, Math.min(9, kp));
+  const i0 = Math.floor(kp), i1 = Math.min(9, i0 + 1), frac = kp - i0;
+  return KP_LAT[i0] + (KP_LAT[i1] - KP_LAT[i0]) * frac;
+}
+
+// YYYY-MM-DD at the given UTC offset (minutes), for matching a moment to
+// "today"/"tomorrow". Plain arithmetic, not Intl: there is no real time
+// zone here, only an approximated fixed offset, see its computation
+// above for why.
+function localDateKey(ms, offsetMin) {
+  const d = new Date(ms + offsetMin * 60000);
+  return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+}
+
+// Full weekday name, without relying on Intl having non-English locale
+// data. Serverless runtimes commonly ship an English-only ICU build and
+// silently fall back to English for a locale they don't have, rather
+// than erroring, confirmed on device: everything else in the German
+// locale block (plain string lookups) displayed correctly, only this
+// (which went through Intl's own locale-name resolution) reverted to
+// English. localDateKey's own Intl call is safe, "en-CA" is an English
+// locale so it resolves even in an English-only build; this is only
+// about needing a name in a language Intl might not have.
+const WEEKDAY_NAMES = {
+  "en-GB": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  "de-DE": ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
+};
+function weekdayName(ms, offsetMin, localeKey) {
+  // Same fixed-offset arithmetic as localDateKey, not Intl: no IANA zone
+  // is available (see the offset's computation above), so there is
+  // nothing for Intl's own timeZone resolution to do here that plain
+  // date math doesn't already do, and it sidesteps the exact class of
+  // Intl-locale-data surprise weekdayName was rewritten around before
+  // (an English-only ICU build silently reverting a requested locale to
+  // English rather than erroring).
+  var names = WEEKDAY_NAMES[localeKey] || WEEKDAY_NAMES["en-GB"];
+  var weekday = new Date(ms + offsetMin * 60000).getUTCDay();
+  return names[weekday] || "";
+}
+
+function norm360(x) { return ((x % 360) + 360) % 360; }
+
+// Low precision solar position, good to a fraction of a degree
+function sunState(ms) {
+  const d = ms / 86400000 + 2440587.5 - 2451545.0;
+  const L = norm360(280.460 + 0.9856474 * d);
+  const g = norm360(357.528 + 0.9856003 * d) * RAD;
+  const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * RAD;
+  const eps = (23.439 - 0.0000004 * d) * RAD;
+  return {
+    dec: Math.asin(Math.sin(eps) * Math.sin(lam)),
+    ra: Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)),
+    gmst: norm360(280.46061837 + 360.98564736629 * d) * RAD,
+  };
+}
+
+function sunAlt(st, lat, lon) {
+  const ha = st.gmst + lon * RAD - st.ra;
+  const la = lat * RAD;
+  return Math.asin(Math.sin(la) * Math.sin(st.dec) + Math.cos(la) * Math.cos(st.dec) * Math.cos(ha)) / RAD;
+}
+
+// Longitude in a centred dipole geomagnetic frame
+function geomagLon(latDeg, lonDeg) {
+  const p = POLE.lat * RAD, l0 = POLE.lon * RAD;
+  const la = latDeg * RAD, lo = lonDeg * RAD;
+  const x = Math.cos(la) * Math.cos(lo), y = Math.cos(la) * Math.sin(lo), z = Math.sin(la);
+  const x1 = x * Math.cos(l0) + y * Math.sin(l0);
+  const y1 = -x * Math.sin(l0) + y * Math.cos(l0);
+  const x2 = x1 * Math.sin(p) - z * Math.cos(p);
+  return Math.atan2(y1, x2) / RAD;
+}
+
+// Latitude in the same centred dipole frame, for the Kp viewline check.
+function geomagLat(latDeg, lonDeg) {
+  const p = POLE.lat * RAD, l0 = POLE.lon * RAD;
+  const la = latDeg * RAD, lo = lonDeg * RAD;
+  const x = Math.cos(la) * Math.cos(lo), y = Math.cos(la) * Math.sin(lo), z = Math.sin(la);
+  const x1 = x * Math.cos(l0) + y * Math.sin(l0);
+  const z2 = x1 * Math.cos(p) + z * Math.sin(p);
+  return Math.asin(Math.max(-1, Math.min(1, z2))) / RAD;
+}
+
+// Magnetic local time in hours (0 is magnetic midnight, when aurora tends to peak)
+function mlt(ms, lat, lon) {
+  const st = sunState(ms);
+  const subLat = st.dec / RAD;
+  const subLon = (st.ra - st.gmst) / RAD;
+  const m = 12 + (geomagLon(lat, lon) - geomagLon(subLat, subLon)) / 15;
+  return ((m % 24) + 24) % 24;
+}        short: ["Minimal", "Low", "Good", "Great"],
         timing: {
           window: (from, to) => "Best time: " + from + " to " + to,
           darkNow: "Best time: now",
