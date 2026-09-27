@@ -36,9 +36,9 @@
     <span class="value value--large" data-value-fit="true" data-value-fit-max-height="70">{{ aurora.verdict | upcase }}</span>
     {% if aurora.forecast and aurora.forecast.size > 0 %}
     <div class="divider"></div>
-    <div class="columns">
+    <div class="grid grid--cols-3 portrait:grid--cols-1 lg:grid--cols-1">
       {% for night in aurora.forecast %}
-      <div class="column text--center">
+      <div class="flex flex--col flex--center-x">
         <span class="label">{{ night.label | upcase }}</span>
         <span class="value value--small" data-value-fit="true" data-value-fit-max-height="80">{{ night.verdict }}</span>
       </div>

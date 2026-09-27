@@ -1036,6 +1036,24 @@ downloads MapLibre (about 1 MB) for these two views, since a hidden
 element doesn't stop a script tag. The map script is now byte-identical
 across all four views. Not yet confirmed on device.
 
+**Forecast strip moved from Columns to Grid; labels centered again.**
+Two device-reported problems. Day labels sat left-aligned above centered
+verdict words: before the switch to Columns each night was `flex
+flex--col flex--center-x` and labels rendered centered (earlier German
+screenshots), after it (`column text--center`) they didn't. And on narrow
+slots the three labels overlapped. The Columns docs (re-read 2026-09-27)
+describe it as a list/feed engine that distributes many items per column
+and hides overflow; it has no way to stack a few cells. Grid does:
+equal columns via `grid--cols-N`, switchable per view with prefixes.
+Swept every view x device x orientation by slot width before editing:
+Full and Half Horizontal stay three across everywhere; Half Vertical
+stacks on the OG and goes three across on the X (`grid--cols-1
+lg:grid--cols-3`); Quadrant is three across only on the OG in landscape
+(`grid--cols-3 portrait:grid--cols-1 lg:grid--cols-1`). Cells are `flex
+flex--col flex--center-x`. The sweep was reasoned from slot widths, not
+rendered, since the framework can't be rendered here; not confirmed on
+device. CLAUDE.md's rule recommending Columns for this strip corrected.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug

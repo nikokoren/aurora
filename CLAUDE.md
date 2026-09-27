@@ -66,15 +66,22 @@ captured real responses only. Before calling a change done:
   for. Check the unversioned docs at `https://trmnl.com/framework/docs/`
   before assuming a class name (verified 2026-09-27: it served 3.3; mirrors
   and cached release pages still called 3.1.1 "latest", so re-fetch before
-  relying on any version number here, and the web wins on disagreement). This includes not defaulting to a
-  generic `flex flex--row` when there is a more specific component for
-  the job: for a row of same-shaped repeated items that should split
-  evenly (a 3-night forecast strip, anything list-like), that is the
-  Columns component (`class="columns"` / `class="column"`), not Flex,
-  Flex sizes each child to its own content by default, which looks fine
-  until two items have very different content lengths and one crowds
-  out the other. Reach for Grid instead only when spans need to be
-  unequal on purpose (`col--span-N`).
+  relying on any version number here, and the web wins on disagreement). Pick the
+  arrangement component by what the content is (per the Columns and
+  Grid pages, verified 2026-09-27):
+  - **Grid** for a fixed, small set of equal cells, like the 3-night
+    forecast strip: `grid--cols-N` gives equal widths, and the column
+    count switches per view with size and orientation prefixes (for
+    example `grid--cols-3 portrait:grid--cols-1 lg:grid--cols-1`), so
+    cells stack where the slot is too narrow. An earlier version of this
+    rule said Columns; that was wrong.
+  - **Columns** for lists and feeds: many same-type items per column,
+    distributed and overflow-hidden by the framework. It has no way to
+    stack a handful of cells when space runs out; on narrow slots the
+    three forecast labels overlapped.
+  - **Flex** for content-sized arrangements inside a cell. Each forecast
+    cell is `flex flex--col flex--center-x`: that centers the label on
+    device, while `text--center` on a `.column` left it left-aligned.
 - **Mashup slot dimensions are not fixed, they are derived from the
   screen's own width/height, which swap under `screen--portrait`.** Do
   not assume Half Horizontal/Half Vertical/Quadrant only need to look

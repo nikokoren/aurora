@@ -153,8 +153,11 @@ opposite of the headline above).
 per voice (no rotation pool for this slot currently).
 
 **Length constraints:** the hardest constraint in the whole plugin.
-Three of these render side by side in a column layout, at the smallest
-screen sizes each column is only around 100 to 150 pixels wide. A
+Where there's room, three of these render side by side, and each
+column can be as narrow as roughly 100 to 150 pixels. In narrow slots
+(Half Vertical on the OG, Quadrant in portrait and on the TRMNL X) the
+nights stack one per row instead, which gives more width but costs
+height. A
 two-word phrase here has already caused a real, visible layout failure
 (text overflowing its column and getting clipped mid-word) that was
 only fixed by shortening it to a single, short word. Anything proposed
