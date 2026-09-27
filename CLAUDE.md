@@ -215,15 +215,22 @@ even if it's only needed in one language today.
 - **No custom classes, and inline styles only where no framework class
   can do the job.** Every class in the markup and in JS-built HTML is a
   framework class (positioning uses `relative`, `absolute`,
-  `inset--0`, `top--0`, `left--0`). Exactly three inline styles remain,
-  each commented in place: `overflow:hidden` on the canvas (the
-  framework has no overflow utility, and it contains the polar chart's
-  fixed-size fallback); `position:absolute;inset:0` on `#aurora-map`
+  `inset--0`, `top--0`, `left--0`). Exactly two inline styles remain,
+  each commented in place: `position:absolute;inset:0` on `#aurora-map`
   (MapLibre adds `.maplibregl-map` to that element and its own
   stylesheet sets `position:relative` there, loaded after the
   framework's, so the framework class would lose and collapse the map;
   checked against MapLibre 5.24.0's source CSS); and the font size
-  `shrinkToFit` writes at render time. Don't "clean up" those three.
+  `shrinkToFit` writes at render time. Don't "clean up" those two.
+- **Anything drawn into a box sizes itself to the box, never to a
+  one-time measurement.** The polar chart used to measure its canvas once
+  and draw at that pixel size; layout kept moving afterwards (text
+  fitting, fonts, the X's scaling), leaving it too small, clipped or
+  invisible in 7 reported view/device combinations. It now draws in a
+  fixed viewBox scaled with `preserveAspectRatio="xMidYMid meet"`, lines
+  kept constant with `vector-effect="non-scaling-stroke"`. A headless
+  Chromium harness (drawn at one size, resized, then measured) went from
+  2/10 to 10/10; rerun it after any change to the chart (see PROJECT.md).
 - **Device-specific elements use the Visibility utilities, e.g.
   `hidden lg:block`** (`lg:` matches only the TRMNL X today). Size
   prefixes follow the device, not the view slot, so an X Quadrant still

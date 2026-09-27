@@ -25,9 +25,9 @@
     X-only visual: "hidden lg:block" hides it on the OG and shows it on the
     TRMNL X, where even this slot has room. Same toggle, same drawing code
     and same canvas rules as full.liquid.txt (see its comments for why
-    stretch-y portrait:stretch-x, and why the two inline styles stay).
+    stretch-y portrait:stretch-x, and why the map element keeps its inline style).
   {% endcomment %}
-  <div id="aurora-canvas" class="hidden lg:block grow stretch-y portrait:stretch-x relative" style="overflow:hidden">
+  <div id="aurora-canvas" class="hidden lg:block grow stretch-y portrait:stretch-x relative">
     {% if trmnl.plugin_settings.custom_fields_values.use_real_map %}
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}
@@ -78,23 +78,21 @@
   function ringGray() { try { return colorOf(TRMNLPaint.bg("gray-35", { el: el }), ink()); } catch (e) { return ink(); } }
 
   // ---------- mode 1: abstract polar chart (SVG) ----------
+  // Drawn in a fixed S x S coordinate space and scaled by the browser to
+  // fit the canvas, centered (viewBox + preserveAspectRatio "meet"),
+  // whatever size the canvas ends up. It used to measure the canvas once
+  // and draw at that pixel size, which froze the chart at whatever size
+  // the layout had at that instant: too small and stuck in a corner, too
+  // large and clipped, or with almost no height and invisible (all seen on
+  // device). Nothing here measures the canvas anymore. Lines keep a constant
+  // on-screen width via vector-effect="non-scaling-stroke"; the dots and
+  // the location marker scale with the chart.
   function drawPolar() {
-    // Guard against measuring before layout has actually sized this box:
-    // a stale 0x0 read would otherwise force the old fixed 440x400
-    // fallback below, which can draw larger than the real container and
-    // spill into neighboring content. Retry a few times first; only fall
-    // back to a fixed size if the box still isn't laid out after that.
-    if ((!el.clientWidth || !el.clientHeight) && drawPolar.tries === undefined) drawPolar.tries = 0;
-    if ((!el.clientWidth || !el.clientHeight) && drawPolar.tries < 10) {
-      drawPolar.tries++;
-      setTimeout(drawPolar, 50);
-      return;
-    }
+    var S = 1000, NS = ' vector-effect="non-scaling-stroke"';
     var G = A.grid;
-    var W = el.clientWidth || 440, H = el.clientHeight || 400;
     var C = ink(), P = paper(), GN = auroraGreen(), PK = auroraPink(), RG = ringGray();
-    var R = Math.floor(Math.min(W, H) / 2) - px(4);
-    var cx = Math.round(W / 2), cy = Math.round(H / 2);
+    var R = S / 2 - 10;
+    var cx = S / 2, cy = S / 2;
     var sign = G.hemi > 0 ? 1 : -1;
     var rad = Math.PI / 180;
     var out = [];
@@ -117,20 +115,20 @@
         // still separates from the plain white canvas behind it, not
         // just from a colored background.
         var fillC = (d >= 6 && Math.random() < 0.5) ? PK : GN;
-        out.push('<rect x="' + x + '" y="' + y + '" width="' + s + '" height="' + s + '" fill="' + fillC + '" stroke="' + RG + '" stroke-width="0.75"/>');
+        out.push('<rect x="' + x + '" y="' + y + '" width="' + s + '" height="' + s + '" fill="' + fillC + '" stroke="' + RG + '" stroke-width="0.75"' + NS + '/>');
       }
     }
     var cells = out.join("");
     var ru = Math.min(G.user_colat, G.max_colat) / G.max_colat * R;
-    var rim = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + C + '" stroke-width="' + px(2) + '"/>';
-    var ring = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ru + '" fill="none" stroke="' + C + '" stroke-width="1" stroke-dasharray="' + px(2) + ' ' + px(6) + '"/>';
-    var ux = cx, uy = Math.round(cy + ru);
+    var rim = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="' + C + '" stroke-width="' + px(2) + '"' + NS + '/>';
+    var ring = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ru + '" fill="none" stroke="' + C + '" stroke-width="1" stroke-dasharray="' + px(2) + ' ' + px(6) + '"' + NS + '/>';
+    var ux = cx, uy = Math.round(cy + ru), mr = Math.round(R * 0.06);
     var you =
-      '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(12) + '" fill="' + P + '" stroke="' + C + '" stroke-width="' + px(2) + '"/>' +
-      '<circle cx="' + ux + '" cy="' + uy + '" r="' + px(6) + '" fill="' + C + '"/>';
+      '<circle cx="' + ux + '" cy="' + uy + '" r="' + mr + '" fill="' + P + '" stroke="' + C + '" stroke-width="' + px(2) + '"' + NS + '/>' +
+      '<circle cx="' + ux + '" cy="' + uy + '" r="' + Math.round(mr / 2) + '" fill="' + C + '"/>';
     el.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '"' +
-      ' shape-rendering="crispEdges" class="absolute top--0 left--0">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + S + ' ' + S + '" width="100%" height="100%"' +
+      ' preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges" class="absolute inset--0">' +
       ring + cells + rim + you + '</svg>';
   }
 

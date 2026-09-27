@@ -1054,6 +1054,26 @@ flex--col flex--center-x`. The sweep was reasoned from slot widths, not
 rendered, since the framework can't be rendered here; not confirmed on
 device. CLAUDE.md's rule recommending Columns for this strip corrected.
 
+**Polar chart scales to its box instead of freezing at a measured size.**
+Seven device-reported failures of the abstract chart (map mode was
+fine): too small and stuck in a corner (Full on X, Half Vertical on X),
+clipped (Full OG portrait, Half Vertical OG portrait), blank (Quadrant
+on X). Cause: `drawPolar` measured the canvas once and drew an SVG at
+exactly that pixel size, while the layout kept changing afterwards; a
+near-zero height gave a zero radius, hence the blank Quadrant.
+Reproduced in headless Chromium (`tools/polar_resize_test.py`: draw at
+one size, resize, measure the outer ring): 2/10 cases correct before,
+both passes being the controls where the size never changes. Fix: draw
+in a fixed 1000x1000 viewBox with `preserveAspectRatio="xMidYMid meet"`
+and `vector-effect="non-scaling-stroke"` for lines; no measuring and no
+retry/fallback logic left. After: 10/10 in every view file (40/40). The
+canvas's inline `overflow:hidden` only existed to contain the old
+fallback; removed, and the test runs without clipping to prove nothing
+spills. Trade-off: the location marker now scales with the chart
+(radius 6% of the chart radius), so it's about 7 px on the smallest
+slots instead of a fixed 12. Test data is the synthetic storefront
+fixture, which is fine for geometry only. Not yet confirmed on device.
+
 ## Known gaps / next steps
 
 - Kp forecast JSON schema unverified live (see above); verify with Debug
