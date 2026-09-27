@@ -51,8 +51,8 @@
     <div id="aurora-map" class="map" style="position:absolute;inset:0"></div>
     {% endif %}
   </div>
-  <div class="flex flex--row portrait:flex--col lg:flex--col flex--center text--center gap grow">
-    <div class="flex flex--col flex--center text--center gap grow">
+  <div class="flex flex--row portrait:flex--col lg:flex--col flex--center-x flex--center-y text--center gap grow">
+    <div class="flex flex--col flex--center text--center gap{% unless aurora.forecast and aurora.forecast.size > 0 %} grow{% endunless %}">
       <span class="value value--xlarge" data-value-fit="true" data-value-fit-max-height="110">{{ aurora.verdict | upcase }}</span>
       {% if aurora.level > 0 %}
       <span class="title title--small">{{ aurora.line }}</span>
@@ -60,7 +60,18 @@
       {% endif %}
     </div>
     {% if aurora.forecast and aurora.forecast.size > 0 %}
-    <div class="divider"></div>
+    {% comment %}
+      Two dividers, not one: plain divider is always horizontal per the
+      framework docs, a vertical one needs divider--v explicitly, there
+      is no automatic adaptation to row context (confirmed directly
+      against the docs, not assumed, after the OG landscape row showed a
+      thin stretched line rather than a clean vertical rule). Whichever
+      one matches the wrapper's current direction is shown; the other
+      stays hidden. Same portrait/lg logic as the wrapper's own
+      row-to-col switch above, so they always agree.
+    {% endcomment %}
+    <div class="divider--v portrait:hidden lg:hidden"></div>
+    <div class="divider hidden portrait:block lg:block"></div>
     <div class="flex flex--col flex--center shrink-0 w--72 portrait:w--full lg:w--full">
       <div class="grid grid--cols-3">
         {% for night in aurora.forecast %}
